@@ -10,6 +10,7 @@ env/
 agent
 agent/
 generated_handshake_production jobs 2025-08-13T1633.json_label
+payload-with-resume-corrected.json
 Aryan Khanna Resume.pdf
 # Python
 __pycache__/
