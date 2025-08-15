@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as os from 'os';
@@ -10,8 +9,9 @@ import { bedrock as bedrock } from '@cdklabs/generative-ai-cdk-constructs';
 import { ContextEnrichment } from '@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock';
 import * as customResources from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
+import * as logs from 'aws-cdk-lib/aws-logs';
 
-export class jobsearch extends cdk.Stack {
+export class jobsearch1 extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -61,6 +61,7 @@ export class jobsearch extends cdk.Stack {
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('BedrockAgentCoreFullAccess'),
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchFullAccessV2'),
       ],
       inlinePolicies: {
         ECRAndLogsPolicy: new iam.PolicyDocument({
@@ -78,18 +79,7 @@ export class jobsearch extends cdk.Stack {
                 'ecr:DescribeImages',
               ],
               resources: ['*'],
-            }),
-            new iam.PolicyStatement({
-              sid: 'CloudWatchLogs',
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogStreams',
-              ],
-              resources: ['*'],
-            }),
+            })
           ],
         }),
       },
@@ -129,16 +119,31 @@ export class jobsearch extends cdk.Stack {
                 actions: ['iam:PassRole'],
                 resources: [jobSearchAgentRole.roleArn],
               }),
+              new iam.PolicyStatement({
+                sid: 'XRayTraceDestination',
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'xray:GetTraceSegmentDestination',
+                  'xray:UpdateTraceSegmentDestination',
+                ],
+                resources: ['*'],
+              }),
             ],
           }),
         },
       }),
     });
 
+    // Create log group for the provider
+    const providerLogGroup = new logs.LogGroup(this, 'AgentRuntimeProviderLogGroup', {
+      retention: logs.RetentionDays.TWO_WEEKS,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Create custom resource provider
     const agentRuntimeProvider = new customResources.Provider(this, 'AgentRuntimeProvider', {
       onEventHandler: agentRuntimeCustomResourceLambda,
-      logRetention: 14, // 14 days
+      logGroup: providerLogGroup,
     });
 
     // Create the custom resource to manage AgentCore runtime
@@ -156,6 +161,8 @@ export class jobsearch extends cdk.Stack {
     // Ensure the custom resource is created after the Docker image is built and role is ready
     agentRuntimeResource.node.addDependency(jobSearchAgentImage);
     agentRuntimeResource.node.addDependency(jobSearchAgentRole);
+
+    // Note: X-Ray trace destination configuration is handled in the agent-runtime-custom-resource Lambda
 
     
     
@@ -180,31 +187,6 @@ export class jobsearch extends cdk.Stack {
       exportName: 'JobSearchAgentRoleArn',
     });
 
-    new cdk.CfnOutput(this, 'JobSearchAgentRuntimeArn', {
-      value: agentRuntimeResource.getAttString('AgentRuntimeArn'),
-      description: 'ARN of the created Job Search Agent Runtime',
-      exportName: 'JobSearchAgentRuntimeArn',
-    });
-
-    new cdk.CfnOutput(this, 'JobSearchAgentRuntimeStatus', {
-      value: agentRuntimeResource.getAttString('Status'),
-      description: 'Basic status of the Job Search Agent Runtime operation',
-    });
-
-    new cdk.CfnOutput(this, 'AgentRuntimeEnvironmentInfo', {
-      value: `KnowledgeBase: ${agentRuntimeResource.getAttString('KnowledgeBaseId')}, Region: ${agentRuntimeResource.getAttString('Region')}`,
-      description: 'Environment variables available in the Lambda function',
-    });
-
-    new cdk.CfnOutput(this, 'AgentRuntimeContainerEnvVars', {
-      value: agentRuntimeResource.getAttString('EnvironmentVariables'),
-      description: 'Environment variables passed to the Agent Runtime container',
-    });
-
-    new cdk.CfnOutput(this, 'AgentRuntimeCustomResourceLogs', {
-      value: `https://console.aws.amazon.com/cloudwatch/home?region=${aws_region}#logsV2:log-groups/log-group/${agentRuntimeCustomResourceLambda.logGroup.logGroupName}`,
-      description: 'CloudWatch Logs URL for Agent Runtime Custom Resource Lambda',
-    });
 
   }
 }
