@@ -12,17 +12,9 @@ logger.setLevel(logging.INFO)
 # Initialize HTTP client for CloudFormation responses
 http = urllib3.PoolManager()
 
-def construct_agent_runtime_arn(context, agent_runtime_name: str, agent_runtime_id: str = None) -> str:
-    """Construct an agent runtime ARN using Lambda context and environment variables"""
-    region = os.environ.get('AWS_REGION', 'us-east-1')
-    account_id = context.invoked_function_arn.split(':')[4] if context and context.invoked_function_arn else 'unknown'
-    
-    # If we have the actual runtime ID, use it; otherwise use a placeholder
-    runtime_identifier = agent_runtime_id if agent_runtime_id else f'{agent_runtime_name}-placeholder'
-    return f'arn:aws:bedrock-agentcore:{region}:{account_id}:runtime/{runtime_identifier}'
 
-def create_agent_runtime(client, agent_runtime_name: str, container_uri: str, role_arn: str, knowledge_base_id: str, aws_region: str, context) -> Dict[str, Any]:
-    """Create an agent runtime and return response data"""
+def create_agent_runtime(client, agent_runtime_name: str, container_uri: str, role_arn: str, knowledge_base_id: str, aws_region: str, context):
+    """Create an agent runtime"""
     logger.info(f"Creating agent runtime: {agent_runtime_name}")
     
     # Prepare environment variables for the agent runtime
@@ -47,31 +39,75 @@ def create_agent_runtime(client, agent_runtime_name: str, container_uri: str, ro
     
     logger.info(f"Create agent runtime API response: {response}")
     
-    # Extract ARN and ID from response
+    # Extract ARN and ID from response for logging
     agent_runtime_id = response.get('agentRuntimeId')
     agent_runtime_arn = response.get('agentRuntimeArn')
     
-    logger.info(f"Raw response - agentRuntimeId: {agent_runtime_id}, agentRuntimeArn: {agent_runtime_arn}")
-    
-    response_data = {
-        'AgentRuntimeArn': agent_runtime_arn or construct_agent_runtime_arn(context, agent_runtime_name, agent_runtime_id),
-        'AgentRuntimeId': agent_runtime_id or agent_runtime_name,
-        'Status': 'Created',
-        'EnvironmentVariables': str(agent_env_vars)
-    }
-    
-    logger.info(f"Agent runtime created - ARN: {response_data['AgentRuntimeArn']}, ID: {response_data['AgentRuntimeId']}")
-    
-    return response_data
+    logger.info(f"Agent runtime created - ARN: {agent_runtime_arn}, ID: {agent_runtime_id}")
 
-def delete_agent_runtime(client, agent_runtime_name: str, context) -> Dict[str, Any]:
+def update_agent_runtime(client, agent_runtime_name: str, container_uri: str, role_arn: str, knowledge_base_id: str, aws_region: str, context):
+    """Update an existing agent runtime using the update API"""
+    logger.info(f"Updating agent runtime: {agent_runtime_name}")
+    
+    try:
+        # Find the agent runtime ID first
+        logger.info("Finding agent runtime ID for update")
+        list_response = client.list_agent_runtimes()
+        
+        agent_runtime_id = None
+        for runtime in list_response.get('agentRuntimes', []):
+            runtime_name = runtime.get('agentRuntimeName', '')
+            runtime_id = runtime.get('agentRuntimeId', '')
+            
+            if runtime_name == agent_runtime_name or runtime_id.startswith(agent_runtime_name):
+                agent_runtime_id = runtime_id
+                logger.info(f"Found runtime ID for update: {agent_runtime_id}")
+                break
+        
+        if not agent_runtime_id:
+            logger.info(f"Agent runtime {agent_runtime_name} not found for update, will create new one instead")
+            # Fall back to creating a new runtime
+            create_agent_runtime(client, agent_runtime_name, container_uri, role_arn, knowledge_base_id, aws_region, context)
+            return
+        
+        # Prepare environment variables
+        agent_env_vars = {
+            'KNOWLEDGE_BASE_ID': knowledge_base_id,
+            'AWS_REGION': aws_region
+        }
+        
+        # Call update_agent_runtime API
+        logger.info(f"Calling update_agent_runtime for ID: {agent_runtime_id}")
+        update_response = client.update_agent_runtime(
+            agentRuntimeId=agent_runtime_id,
+            agentRuntimeArtifact={
+                'containerConfiguration': {
+                    'containerUri': container_uri
+                }
+            },
+            roleArn=role_arn,
+            networkConfiguration={"networkMode": "PUBLIC"},
+            environmentVariables=agent_env_vars
+        )
+        
+        logger.info(f"Update agent runtime API response: {update_response}")
+        
+        # Extract updated information for logging
+        updated_arn = update_response.get('agentRuntimeArn')
+        updated_version = update_response.get('agentRuntimeVersion')
+        updated_status = update_response.get('status')
+        
+        logger.info(f"Agent runtime updated successfully - ARN: {updated_arn}, Version: {updated_version}, Status: {updated_status}")
+        
+    except Exception as update_error:
+        error_message = str(update_error)
+        logger.error(f"Error updating agent runtime: {error_message}")
+        # Re-raise the exception so the caller can handle it
+        raise
+
+def delete_agent_runtime(client, agent_runtime_name: str, context):
     """Delete an agent runtime by finding it and using its ID"""
     logger.info(f"Deleting agent runtime: {agent_runtime_name}")
-    
-    response_data = {
-        'AgentRuntimeArn': construct_agent_runtime_arn(context, agent_runtime_name),
-        'AgentRuntimeName': agent_runtime_name
-    }
     
     try:
         # Find the agent runtime by listing all runtimes
@@ -96,242 +132,189 @@ def delete_agent_runtime(client, agent_runtime_name: str, context) -> Dict[str, 
         
         if agent_runtime_id is None:
             logger.info(f"No matching runtime found for name: {agent_runtime_name}")
-            response_data['Status'] = 'Runtime Not Found - Assuming Already Deleted'
-            response_data['Message'] = f'No runtime found with name {agent_runtime_name}, assuming already deleted'
-            return response_data
+            return
         
         # Attempt to delete the agent runtime using the ID
         logger.info(f"Attempting to delete agent runtime with ID: {agent_runtime_id}")
         delete_response = client.delete_agent_runtime(agentRuntimeId=agent_runtime_id)
         logger.info(f"Delete agent runtime API response: {delete_response}")
         
-        response_data['Status'] = 'Deleted'
-        response_data['Message'] = f'Agent runtime {agent_runtime_name} (ID: {agent_runtime_id}) deletion initiated'
+        logger.info(f"Agent runtime {agent_runtime_name} (ID: {agent_runtime_id}) deletion initiated")
         
     except Exception as delete_error:
         error_message = str(delete_error)
         logger.error(f"Error deleting agent runtime: {error_message}")
-        
-        # Check if it's a "not found" error, which is acceptable for delete operations
-        if 'ResourceNotFoundException' in error_message or 'not found' in error_message.lower():
-            logger.info(f"Agent runtime {agent_runtime_name} was already deleted or never existed")
-            response_data['Status'] = 'Already Deleted'
-            response_data['Message'] = f'Agent runtime {agent_runtime_name} was already deleted or never existed'
-        else:
-            # For other errors, we should still report success to avoid CloudFormation getting stuck
-            logger.warning(f"Delete operation encountered error but will report success to avoid stack deletion issues: {error_message}")
-            response_data['Status'] = 'Delete Attempted'
-            response_data['Message'] = f'Delete attempted but encountered error: {error_message}'
-    
-    return response_data
+        # Don't fail delete operations - just log the error
 
-def wait_for_deletion(client, agent_runtime_name: str, max_wait_seconds: int = 60) -> bool:
-    """Wait for agent runtime deletion to complete by checking if it no longer exists"""
-    import time
+
+def configure_xray_trace_destination():
+    """Configure X-Ray to use CloudWatch Logs as trace destination for OTLP support"""
+    logger.info("Configuring X-Ray trace destination")
     
-    logger.info(f"Waiting for agent runtime {agent_runtime_name} deletion to complete (max {max_wait_seconds}s)")
-    
-    start_time = time.time()
-    check_interval = 5  # Check every 5 seconds
-    
-    while time.time() - start_time < max_wait_seconds:
+    try:
+        xray_client = boto3.client('xray')
+        
+        # First check current destination
         try:
-            # Try to list all runtimes and see if our runtime still exists
-            list_response = client.list_agent_runtimes()
-            runtimes = list_response.get('agentRuntimes', [])
+            current_response = xray_client.get_trace_segment_destination()
+            current_destination = current_response.get('Destination', 'XRay')
+            current_status = current_response.get('Status', 'UNKNOWN')
             
-            # Check if our runtime still exists
-            runtime_exists = False
-            for runtime in runtimes:
-                runtime_name = runtime.get('agentRuntimeName', '')
-                runtime_id = runtime.get('agentRuntimeId', '')
+            logger.info(f"Current X-Ray destination: {current_destination}, Status: {current_status}")
+            
+            # If already set to CloudWatchLogs and active, no need to update
+            if current_destination == 'CloudWatchLogs' and current_status == 'ACTIVE':
+                logger.info("X-Ray already configured correctly for CloudWatchLogs")
+                return
+            
+            # If status is PENDING, don't try to update
+            if current_status == 'PENDING':
+                logger.info("X-Ray update already in progress, skipping")
+                return
                 
-                if runtime_name == agent_runtime_name or runtime_id.startswith(agent_runtime_name):
-                    runtime_exists = True
-                    runtime_status = runtime.get('status', 'UNKNOWN')
-                    logger.info(f"Runtime {agent_runtime_name} still exists with status: {runtime_status}")
-                    break
+        except Exception as get_error:
+            logger.info(f"Could not get current destination (may not exist): {get_error}")
+        
+        # Update to CloudWatchLogs
+        try:
+            update_response = xray_client.update_trace_segment_destination(
+                Destination='CloudWatchLogs'
+            )
             
-            if not runtime_exists:
-                logger.info(f"Runtime {agent_runtime_name} successfully deleted")
-                return True
-                
-            # Wait before next check
-            logger.info(f"Waiting {check_interval}s before next check...")
-            time.sleep(check_interval)
+            new_destination = update_response.get('Destination', 'CloudWatchLogs')
+            new_status = update_response.get('Status', 'PENDING')
             
-        except Exception as check_error:
-            logger.warning(f"Error checking deletion status: {check_error}")
-            # Continue waiting, maybe it's a temporary error
-            time.sleep(check_interval)
-    
-    # Timeout reached
-    logger.warning(f"Timeout waiting for {agent_runtime_name} deletion after {max_wait_seconds}s")
-    return False
+            logger.info(f"X-Ray destination updated to: {new_destination}, Status: {new_status}")
+            
+        except Exception as update_error:
+            error_msg = str(update_error)
+            logger.warning(f"Failed to update X-Ray destination: {error_msg}")
+            
+            # If update fails due to pending status, that's okay
+            if 'PENDING' in error_msg:
+                logger.info("X-Ray update already in progress")
+            else:
+                logger.error(f"Failed to update X-Ray destination: {error_msg}")
+            
+    except Exception as e:
+        logger.error(f"Error configuring X-Ray trace destination: {e}")
+
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
-    Custom resource Lambda function to manage Bedrock AgentCore runtime creation/deletion
+    Custom resource Lambda function to manage Bedrock AgentCore runtime lifecycle.
+    Supports Create, Update (using versioning), and Delete operations.
+    Version: 2.0 - Uses update_agent_runtime API for updates
     """
     logger.info(f"Received event: {json.dumps(event, default=str)}")
-    
-    # Log environment variables for debugging
-    knowledge_base_id = os.environ.get('KNOWLEDGE_BASE_ID')
-    aws_region = os.environ.get('AWS_REGION')
-    logger.info(f"Environment variables - KNOWLEDGE_BASE_ID: {knowledge_base_id}, AWS_REGION: {aws_region}")
     
     # Extract CloudFormation custom resource properties
     request_type = event['RequestType']
     resource_properties = event['ResourceProperties']
+    
+    # Get environment variables
+    knowledge_base_id = os.environ.get('KNOWLEDGE_BASE_ID')
+    aws_region = os.environ.get('AWS_REGION')
+    
+    logger.info(f"Processing {request_type} request for {event.get('LogicalResourceId')}")
     
     # Extract parameters from CDK
     agent_runtime_name = resource_properties['AgentRuntimeName']
     container_uri = resource_properties['ContainerUri']
     role_arn = resource_properties['RoleArn']
     
-    response_data = {
-        'AgentRuntimeArn': construct_agent_runtime_arn(context, agent_runtime_name),  # Initialize with placeholder ARN
-        'AgentRuntimeName': agent_runtime_name,
-        'KnowledgeBaseId': knowledge_base_id or 'Not Set',
-        'Region': aws_region or 'Not Set'
-    }
+    # Simple response data - no attributes needed
+    response_data = {}
+    
     # Handle Physical Resource ID consistently to prevent replacement loops
     if request_type == 'Create':
-        # For Create: use stable ID
         physical_resource_id = f"agent-runtime-{agent_runtime_name}-stable"
         logger.info(f"Create operation - using stable physical resource ID: {physical_resource_id}")
     else:
-        # For Update/Delete: use the existing PhysicalResourceId from CloudFormation
         physical_resource_id = event.get('PhysicalResourceId', f"agent-runtime-{agent_runtime_name}-stable")
         logger.info(f"Update/Delete operation - using existing physical resource ID: {physical_resource_id}")
     
     try:
-        # Create Bedrock AgentCore client (region will be automatically detected from Lambda environment)
+        # Create Bedrock AgentCore client
         client = boto3.client('bedrock-agentcore-control')
         
         if request_type == 'Create':
             try:
-                create_response = create_agent_runtime(client, agent_runtime_name, container_uri, role_arn, knowledge_base_id, aws_region, context)
-                response_data.update(create_response)
-                logger.info(f"Using stable physical resource ID: {physical_resource_id}")
+                # Create agent runtime
+                create_agent_runtime(client, agent_runtime_name, container_uri, role_arn, knowledge_base_id, aws_region, context)
+                logger.info(f"Agent runtime created successfully")
+                
+                # Configure X-Ray trace destination
+                configure_xray_trace_destination()
+                logger.info("X-Ray trace destination configured")
                     
             except Exception as create_error:
                 logger.error(f"Failed to create agent runtime: {create_error}")
-                # For create failures, we should fail the CloudFormation operation
-                response_data['AgentRuntimeArn'] = construct_agent_runtime_arn(context, agent_runtime_name)
-                response_data['Status'] = 'Creation Failed'
-                response_data['Error'] = str(create_error)
-                # Send failure response to CloudFormation
-                send_response(event, context, 'FAILED', response_data, physical_resource_id)
-                return {'statusCode': 500, 'body': json.dumps(response_data)}
+                send_response(event, context, 'FAILED', {'Error': str(create_error)}, physical_resource_id)
+                return {'statusCode': 500, 'body': json.dumps({'Error': str(create_error)})}
+                
         elif request_type == 'Update':
             logger.info(f"Update requested for agent runtime: {agent_runtime_name}")
-            logger.info("Performing update by deleting existing runtime and creating new one")
-            
             try:
-                # Step 1: Delete existing runtime (if it exists)
-                delete_response = delete_agent_runtime(client, agent_runtime_name, context)
-                logger.info(f"Delete step completed: {delete_response['Status']}")
-                
-                # Step 2: Wait for deletion to complete before creating new one
-                if delete_response['Status'] in ['Deleted', 'Already Deleted']:
-                    if delete_response['Status'] == 'Deleted':
-                        logger.info("Waiting for deletion to complete before creating new runtime...")
-                        deletion_completed = wait_for_deletion(client, agent_runtime_name, max_wait_seconds=90)
-                        
-                        if not deletion_completed:
-                            logger.warning("Deletion wait timed out, proceeding with creation anyway")
-                            response_data['Warning'] = 'Deletion wait timed out but proceeding with creation'
-                        else:
-                            logger.info("Deletion confirmed complete, proceeding with creation")
-                    else:
-                        logger.info("Runtime was already deleted, proceeding with creation")
-                    
-                    # Step 3: Create new runtime with updated properties
-                    create_response = create_agent_runtime(client, agent_runtime_name, container_uri, role_arn, knowledge_base_id, aws_region, context)
-                    logger.info(f"Create step completed: {create_response['Status']}")
-                    
-                    # Use the create response data
-                    response_data.update(create_response)
-                    response_data['Status'] = 'Updated (Deleted and Recreated)'
-                    response_data['Message'] = f'Agent runtime {agent_runtime_name} updated by deleting old runtime and creating new one'
-                    response_data['DeleteStep'] = delete_response['Status']
-                    response_data['CreateStep'] = create_response['Status']
-                else:
-                    # Delete step failed, don't proceed with creation
-                    logger.error(f"Delete step failed: {delete_response['Status']}, aborting update")
-                    response_data.update(delete_response)
-                    response_data['Status'] = 'Update Failed - Delete Step Failed'
-                    response_data['Message'] = f'Update failed because delete step failed: {delete_response.get("Message", "Unknown error")}'
-                    send_response(event, context, 'FAILED', response_data, physical_resource_id)
-                    return {'statusCode': 500, 'body': json.dumps(response_data)}
-                
+                update_agent_runtime(client, agent_runtime_name, container_uri, role_arn, knowledge_base_id, aws_region, context)
+                logger.info("Update completed successfully")
             except Exception as update_error:
                 logger.error(f"Failed to update agent runtime: {update_error}")
-                response_data['AgentRuntimeArn'] = construct_agent_runtime_arn(context, agent_runtime_name)
-                response_data['Status'] = 'Update Failed'
-                response_data['Error'] = str(update_error)
-                # Send failure response to CloudFormation
-                send_response(event, context, 'FAILED', response_data, physical_resource_id)
-                return {'statusCode': 500, 'body': json.dumps(response_data)}
+                send_response(event, context, 'FAILED', {'Error': str(update_error)}, physical_resource_id)
+                return {'statusCode': 500, 'body': json.dumps({'Error': str(update_error)})}
             
         elif request_type == 'Delete':
-            delete_response = delete_agent_runtime(client, agent_runtime_name, context)
-            response_data.update(delete_response)
-        
-        else:
-            # Handle any unexpected request types
-            logger.warning(f"Unexpected request type: {request_type}")
-            response_data['AgentRuntimeArn'] = construct_agent_runtime_arn(context, agent_runtime_name)
-            response_data['Status'] = f'Unexpected Request Type: {request_type}'
-            response_data['Message'] = f'Received unexpected request type: {request_type}'
-        
-        # Ensure AgentRuntimeArn is always present before sending response
-        if not response_data.get('AgentRuntimeArn'):
-            response_data['AgentRuntimeArn'] = construct_agent_runtime_arn(context, agent_runtime_name)
-            logger.warning("AgentRuntimeArn was missing, added constructed ARN")
+            try:
+                delete_agent_runtime(client, agent_runtime_name, context)
+                logger.info("Agent runtime deletion initiated")
+            except Exception as delete_error:
+                logger.error(f"Failed to delete agent runtime: {delete_error}")
+                # Don't fail delete operations - just log the error
+                pass
         
         # Send success response to CloudFormation
         send_response(event, context, 'SUCCESS', response_data, physical_resource_id)
         
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
-        # Ensure AgentRuntimeArn is present even in failure cases
-        error_response_data = {
-            'Error': str(e),
-            'AgentRuntimeArn': construct_agent_runtime_arn(context, agent_runtime_name),
-            'AgentRuntimeName': agent_runtime_name
-        }
         # Send failure response to CloudFormation
-        send_response(event, context, 'FAILED', error_response_data, physical_resource_id)
+        send_response(event, context, 'FAILED', {'Error': str(e)}, physical_resource_id)
     
     return {'statusCode': 200, 'body': json.dumps(response_data)}
 
 def send_response(event: Dict[str, Any], context, response_status: str, response_data: Dict[str, Any], physical_resource_id: str):
-    """
-    Send response back to CloudFormation
-    """
+    """Send response back to CloudFormation according to the documented format"""
     response_url = event['ResponseURL']
     
+    # Build response according to CloudFormation custom resource documentation
     response_body = {
         'Status': response_status,
         'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',
         'PhysicalResourceId': physical_resource_id,
         'StackId': event['StackId'],
         'RequestId': event['RequestId'],
-        'LogicalResourceId': event['LogicalResourceId'],
-        'Data': response_data
+        'LogicalResourceId': event['LogicalResourceId']
     }
     
-    json_response_body = json.dumps(response_body)
+    # Only add Data if we have response_data and it's not empty
+    if response_data:
+        response_body['Data'] = response_data
     
+    json_response_body = json.dumps(response_body)
+    logger.info(f"Sending {response_status} response to CloudFormation")
+    
+    # Use proper headers for S3 PUT request
     headers = {
-        'content-type': '',
-        'content-length': str(len(json_response_body))
+        'Content-Type': 'application/json',
+        'Content-Length': str(len(json_response_body))
     }
     
     try:
         response = http.request('PUT', response_url, body=json_response_body, headers=headers)
-        logger.info(f"Status code: {response.status}")
+        logger.info(f"CloudFormation response status: {response.status}")
+        if response.status != 200:
+            logger.error(f"CloudFormation response error: {response.data.decode('utf-8')}")
     except Exception as e:
-        logger.error(f"Error sending response: {e}")
+        logger.error(f"Error sending response to CloudFormation: {e}")
+        # This is critical - if we can't respond, CloudFormation will timeout
+        raise
