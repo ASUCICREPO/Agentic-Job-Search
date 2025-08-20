@@ -1,5 +1,7 @@
 import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from "@aws-sdk/client-bedrock-agentcore";
 import { LOCAL_DEV_MODE } from "./constants";
+import { v4 as uuidv4 } from 'uuid';
+import { Cookies } from 'react-cookie';
 
 class BedrockAgentService {
   constructor() {
@@ -19,14 +21,19 @@ class BedrockAgentService {
     // When deployed on Amplify, credentials will be provided automatically
 
     this.client = new BedrockAgentCoreClient(clientConfig);
+    this.cookies = new Cookies();
+    this.sessionIdCookieName = 'bedrock_agent_session_id';
   }
 
   async invokeAgentStreaming(inputText, resumeText, onChunk, onComplete, onError) {
     try {
+      // Get or create session ID from cookie
+      const sessionId = this.getOrCreateSessionId();
+      
       // Create the payload matching the Python implementation format
       const payload = {
         prompt: inputText,
-        session_id: this.generateSessionId()
+        session_id: sessionId
       };
 
       // Add resume text to payload if provided
@@ -41,7 +48,7 @@ class BedrockAgentService {
         payload: new TextEncoder().encode(JSON.stringify(payload)),
         contentType: 'application/json',
         accept: 'application/json',
-        runtimeSessionId: this.generateSessionId()
+        runtimeSessionId: sessionId
       });
 
       // Send the command and get the response
@@ -104,15 +111,32 @@ class BedrockAgentService {
     }
   }
 
-  generateSessionId() {
-    // Generate a session ID that's at least 33 characters long
-    const timestamp = Date.now().toString();
-    const randomPart1 = Math.random().toString(36).substr(2, 10);
-    const randomPart2 = Math.random().toString(36).substr(2, 10);
-    const sessionId = `session_${timestamp}_${randomPart1}_${randomPart2}`;
+  getOrCreateSessionId() {
+    // Try to get existing session ID from cookie
+    let sessionId = this.cookies.get(this.sessionIdCookieName);
     
-    // Ensure it's at least 33 characters, pad if necessary
-    return sessionId.length >= 33 ? sessionId : sessionId.padEnd(33, '0');
+    if (!sessionId) {
+      // Generate a new UUID-based session ID
+      sessionId = `session_${uuidv4()}`;
+      
+      // Store in cookie with 24 hour expiration
+      const expires = new Date();
+      expires.setTime(expires.getTime() + (24 * 60 * 60 * 1000)); // 24 hours
+      
+      this.cookies.set(this.sessionIdCookieName, sessionId, {
+        expires: expires,
+        path: '/',
+        secure: window.location.protocol === 'https:',
+        sameSite: 'lax'
+      });
+    }
+    
+    return sessionId;
+  }
+
+  clearSession() {
+    // Method to clear the session cookie if needed
+    this.cookies.remove(this.sessionIdCookieName, { path: '/' });
   }
 }
 
