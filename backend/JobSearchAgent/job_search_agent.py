@@ -73,10 +73,6 @@ class JobSearchAgent:
             )
         )
     
-
-    
-
-    
     def get_conversation_history(self) -> list:
         """
         Get the current conversation history for this session.
@@ -206,8 +202,6 @@ async def handle_agent_request(payload):
         error_msg = f"Error processing request: {str(e)}"
         print(error_msg)
         yield {"error": error_msg}
-
-
 
 app = BedrockAgentCoreApp()
 
