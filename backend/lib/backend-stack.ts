@@ -160,14 +160,7 @@ export class jobsearch1 extends cdk.Stack {
 
     // Ensure the custom resource is created after the Docker image is built and role is ready
     agentRuntimeResource.node.addDependency(jobSearchAgentImage);
-    agentRuntimeResource.node.addDependency(jobSearchAgentRole);
-
-    // Note: X-Ray trace destination configuration is handled in the agent-runtime-custom-resource Lambda
-
-    
-    
-    
-    
+    agentRuntimeResource.node.addDependency(jobSearchAgentRole);   
     
     new cdk.CfnOutput(this, 'DockerImageURI', {
       value: jobSearchAgentImage.imageUri,
