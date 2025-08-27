@@ -57,7 +57,6 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     const StudentMemoryContractTable = new dynamodb.Table(this, 'StudentMemoryContractTable', {
-      tableName: 'StudentMemoryContractTable',
       partitionKey: { name: 'sessionID', type: dynamodb.AttributeType.STRING },
       sortKey:      { name: 'actionID',  type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,  //for production have retain
