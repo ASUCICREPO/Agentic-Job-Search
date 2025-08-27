@@ -14,6 +14,11 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_tools import retrieve
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
+# Environment Variables
+AWS_REGION = os.getenv('AWS_REGION', 'us-west-2')
+AGENTCORE_MEMORY_ID = os.getenv('AGENTCORE_MEMORY_ID')
+KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID') # Not used anywhere but it is important for retreive tool 
+
 class JobSearchAgent:
     """
     Career Job Search Agent that uses retrieve function tooling to search knowledge bases.
@@ -34,8 +39,11 @@ class JobSearchAgent:
                        If None, creates a stateless agent for single interactions.
         """
         self.session_id = session_id
-        self.memory_client = MemoryClient(region_name=os.getenv('AWS_REGION', 'us-west-2'))
-        self.memory_id = os.getenv('AGENTCORE_MEMORY_ID')
+        self.memory_client = MemoryClient(region_name=AWS_REGION)
+        self.memory_id = AGENTCORE_MEMORY_ID
+        
+        # Create actor_id once if session_id is provided
+        self.actor_id = f"user_{session_id}" if session_id else None
         
         if session_id:
             # Use or create session-specific agent
@@ -136,48 +144,17 @@ class JobSearchAgent:
         if not self.session_id or not self.memory_id:
             return
             
+        print(f"Creating memory event - Actor ID: {self.actor_id}, Session ID: {self.session_id}")
+            
         try:
             self.memory_client.create_event(
                 memory_id=self.memory_id,
-                actor_id=f"user_{self.session_id}",
+                actor_id=self.actor_id,
                 session_id=self.session_id,
                 messages=[(content, role)]
             )
         except Exception as e:
             print(f"Failed to create memory event: {e}")
-    
-    def _sync_conversation_to_memory(self):
-        """
-        Sync messages from SlidingWindowConversationManager to AgentCore Memory.
-        """
-        if not self.session_id or not self.memory_id:
-            return
-            
-        try:
-            # Get messages from the conversation manager
-            messages = self.agent.messages
-            
-            # Convert messages to memory events
-            memory_messages = []
-            for message in messages:
-                role = message.get('role', '').upper()
-                content = message.get('content', '')
-                
-                if role in ['USER', 'ASSISTANT', 'TOOL'] and content:
-                    memory_messages.append((content, role))
-            
-            # Create batch memory event if we have messages
-            if memory_messages:
-                self.memory_client.create_event(
-                    memory_id=self.memory_id,
-                    actor_id=f"user_{self.session_id}",
-                    session_id=self.session_id,
-                    messages=memory_messages
-                )
-        except Exception as e:
-            print(f"Failed to sync conversation to memory: {e}")
-
-
 
 async def handle_agent_request(payload):
     """
@@ -247,8 +224,7 @@ async def handle_agent_request(payload):
                     tool_data = {"tool_name": tool_info["name"]}
                     if "input" in tool_info:
                         tool_data["tool_input"] = tool_info["input"]
-                        # Create memory event for tool usage
-                        agent._create_memory_event("TOOL", f"{tool_info['name']}({tool_info['input']})")
+                        # No memory event for tool usage - removed
                     yield tool_data
             
             # Error events
@@ -259,8 +235,7 @@ async def handle_agent_request(payload):
         if final_response:
             # Create memory event for assistant response
             agent._create_memory_event("ASSISTANT", final_response)
-            # Sync entire conversation to memory
-            agent._sync_conversation_to_memory()
+            # No batch sync - removed
             yield {"final_result": final_response}
             
     except Exception as e:
