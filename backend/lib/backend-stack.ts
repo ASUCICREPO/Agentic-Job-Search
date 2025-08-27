@@ -10,6 +10,8 @@ import { ContextEnrichment } from '@cdklabs/generative-ai-cdk-constructs/lib/cdk
 import * as customResources from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+
 
 export class jobsearch1 extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -52,6 +54,13 @@ export class jobsearch1 extends cdk.Stack {
       contextEnrichment: ContextEnrichment.foundationModel({
     enrichmentModel: bedrock.BedrockFoundationModel.ANTHROPIC_CLAUDE_HAIKU_V1_0,
         }),
+    });
+
+    const StudentMemoryContractTable = new dynamodb.Table(this, 'StudentMemoryContractTable', {
+      tableName: 'StudentMemoryContractTable',
+      partitionKey: { name: 'sessionID', type: dynamodb.AttributeType.STRING },
+      sortKey:      { name: 'actionID',  type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,  //for production have retain
     });
 
     // Create IAM role with required permissions
