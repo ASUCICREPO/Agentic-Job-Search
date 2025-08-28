@@ -61,6 +61,13 @@ export class jobsearch1 extends cdk.Stack {
       sortKey:      { name: 'actionID',  type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,  //for production have retain
     });
+        
+    // Export the table name for reference
+    new cdk.CfnOutput(this, 'StudentMemoryContractTableName', {
+      value: StudentMemoryContractTable.tableName,
+      description: 'DynamoDB table for storing student profiles',
+      exportName: 'StudentMemoryContractTableName',
+    });
 
     // Create IAM role with required permissions
     // const jobSearchAgentRole = new iam.Role(this, 'JobSearchAgentRole', {
