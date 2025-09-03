@@ -8,9 +8,7 @@ import * as os from 'os';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { bedrock as bedrock } from '@cdklabs/generative-ai-cdk-constructs';
 import { ContextEnrichment } from '@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock';
-import * as customResources from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -185,115 +183,7 @@ export class jobsearch1 extends cdk.Stack {
       description: 'Send daily notifications at 9 AM',
     });
 
-    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda));
-
-    // Create IAM role with required permissions
-    // const jobSearchAgentRole = new iam.Role(this, 'JobSearchAgentRole', {
-    //   assumedBy: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com'),
-    //   description: 'IAM role for Job Search Agent with Bedrock AgentCore and ECR permissions',
-    //   managedPolicies: [
-    //     iam.ManagedPolicy.fromAwsManagedPolicyName('BedrockAgentCoreFullAccess'),
-    //     iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess'),
-    //     iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchFullAccessV2'),
-    //   ],
-    //   inlinePolicies: {
-    //     ECRAndLogsPolicy: new iam.PolicyDocument({
-    //       statements: [
-    //         new iam.PolicyStatement({
-    //           sid: 'ECRReadOnly',
-    //           effect: iam.Effect.ALLOW,
-    //           actions: [
-    //             'ecr:GetAuthorizationToken',
-    //             'ecr:BatchCheckLayerAvailability',
-    //             'ecr:GetDownloadUrlForLayer',
-    //             'ecr:BatchGetImage',
-    //             'ecr:ListImages',
-    //             'ecr:DescribeRepositories',
-    //             'ecr:DescribeImages',
-    //           ],
-    //           resources: ['*'],
-    //         })
-    //       ],
-    //     }),
-    //   },
-    // });
-
-    // // Create Lambda function for custom resource to handle AgentCore runtime creation
-    // const agentRuntimeCustomResourceLambda = new lambda.Function(this, 'AgentRuntimeCustomResourceLambda', {
-    //   runtime: lambda.Runtime.PYTHON_3_11,
-    //   handler: 'agent-runtime-custom-resource.lambda_handler',
-    //   code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'agent-runtime-custom-resource'), {
-    //     bundling: {
-    //       image: lambda.Runtime.PYTHON_3_11.bundlingImage,
-    //       command: [
-    //         'bash', '-c',
-    //         'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output'
-    //       ],
-    //     },
-    //   }),
-    //   timeout: cdk.Duration.minutes(5),
-    //   architecture: lambdaArchitecture,
-    //   environment: {
-    //     KNOWLEDGE_BASE_ID: kb.knowledgeBaseId,
-    //   },
-    //   role: new iam.Role(this, 'AgentRuntimeCustomResourceLambdaRole', {
-    //     assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-    //     description: 'Lambda execution role for AgentCore runtime custom resource',
-    //     managedPolicies: [
-    //       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-    //       iam.ManagedPolicy.fromAwsManagedPolicyName('BedrockAgentCoreFullAccess'),
-    //     ],
-    //     inlinePolicies: {
-    //       PassRolePolicy: new iam.PolicyDocument({
-    //         statements: [
-    //           new iam.PolicyStatement({
-    //             sid: 'PassRole',
-    //             effect: iam.Effect.ALLOW,
-    //             actions: ['iam:PassRole'],
-    //             resources: [jobSearchAgentRole.roleArn],
-    //           }),
-    //           new iam.PolicyStatement({
-    //             sid: 'XRayTraceDestination',
-    //             effect: iam.Effect.ALLOW,
-    //             actions: [
-    //               'xray:GetTraceSegmentDestination',
-    //               'xray:UpdateTraceSegmentDestination',
-    //             ],
-    //             resources: ['*'],
-    //           }),
-    //         ],
-    //       }),
-    //     },
-    //   }),
-    // });
-
-    // // Create log group for the provider
-    // const providerLogGroup = new logs.LogGroup(this, 'AgentRuntimeProviderLogGroup', {
-    //   retention: logs.RetentionDays.TWO_WEEKS,
-    //   removalPolicy: cdk.RemovalPolicy.DESTROY,
-    // });
-
-    // // Create custom resource provider
-    // const agentRuntimeProvider = new customResources.Provider(this, 'AgentRuntimeProvider', {
-    //   onEventHandler: agentRuntimeCustomResourceLambda,
-    //   logGroup: providerLogGroup,
-    // });
-
-    // // Create the custom resource to manage AgentCore runtime
-    // const agentRuntimeResource = new cdk.CustomResource(this, 'JobSearchAgentRuntime', {
-    //   serviceToken: agentRuntimeProvider.serviceToken,
-    //   properties: {
-    //     AgentRuntimeName: 'JobSearchAgent',
-    //     ContainerUri: jobSearchAgentImage.imageUri,
-    //     RoleArn: jobSearchAgentRole.roleArn,
-    //   },
-    //   // Custom resource type to ensure proper CloudFormation handling
-    //   resourceType: 'Custom::JobSearchAgentRuntime'
-    // });
-
-    // // Ensure the custom resource is created after the Docker image is built and role is ready
-    // agentRuntimeResource.node.addDependency(jobSearchAgentImage);
-    // agentRuntimeResource.node.addDependency(jobSearchAgentRole);   
+    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda)); 
     
     new cdk.CfnOutput(this, 'DockerImageURI', {
       value: jobSearchAgentImage.imageUri,
