@@ -2,7 +2,10 @@ import json
 import boto3
 import os
 
-bedrock_agent_runtime = boto3.client('bedrock-agent-runtime')
+
+session = boto3.Session()
+region = os.environ.get('AWS_REGION', 'us-east-1')
+client = session.client('bedrock-agentcore', region_name=region)
 
 def lambda_handler(event, context):
     """SQS triggered processor - processes individual job notification requests"""
@@ -24,7 +27,7 @@ def lambda_handler(event, context):
                     'notification_method': notification_method
                 }
                 
-                bedrock_agent_runtime.invoke_agent(
+                client.invoke_agent(
                     agentId=agent_id,
                     agentAliasId=agent_alias_id,
                     sessionId=session_id,
