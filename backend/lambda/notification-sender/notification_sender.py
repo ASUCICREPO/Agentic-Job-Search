@@ -49,8 +49,9 @@ def lambda_handler(event, context):
 def send_email_notification(email):
     """Send email notification via SES"""
     try:
+        sender_email = os.environ.get('SENDER_EMAIL', 'noreply@yourcareerservices.com')
         ses.send_email(
-            Source='noreply@yourcareerservices.com',  # TODO: Replace with verified email
+            Source=sender_email,
             Destination={'ToAddresses': [email]},
             Message={
                 'Subject': {'Data': 'Your Daily Job Recommendations'},
