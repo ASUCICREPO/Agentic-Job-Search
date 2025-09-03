@@ -34,6 +34,14 @@ export class jobsearch1 extends cdk.Stack {
     const lambdaArchitecture = hostArchitecture === 'arm64' ? lambda.Architecture.ARM_64 : lambda.Architecture.X86_64;
     console.log(`Lambda architecture: ${lambdaArchitecture}`);
 
+    // Admin email for SES sender identity
+    const adminEmail = this.node.tryGetContext('adminEmail') || 'admin@yourcareerservices.com';
+    
+    // Create SES Email Identity
+    const senderIdentity = new ses.EmailIdentity(this, 'SenderIdentity', {
+      identity: ses.Identity.email(adminEmail),
+    });
+
     const JobsBucket = new s3.Bucket(this, 'JobsBucket', {
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN, 
@@ -151,6 +159,7 @@ export class jobsearch1 extends cdk.Stack {
       environment: {
         DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
         SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
+        SENDER_EMAIL: adminEmail,
       },
     });
 
