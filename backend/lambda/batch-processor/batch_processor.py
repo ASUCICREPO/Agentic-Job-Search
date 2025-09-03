@@ -26,8 +26,8 @@ def process_batch():
         
         messages = []
         for item in response['Items']:
-            session_id = item.get('sessionID')
-            email = item.get('actionID')
+            action_id = item.get('actionID') 
+            email = item.get('email')
             notification_method = item.get('notificationMethod', 'email')
             
             if email and '@' in email:
@@ -35,7 +35,7 @@ def process_batch():
                     'Id': str(len(messages)),
                     'MessageBody': json.dumps({
                         'email': email,
-                        'session_id': session_id,
+                        'action_id': action_id,
                         'notification_method': notification_method
                     })
                 })
