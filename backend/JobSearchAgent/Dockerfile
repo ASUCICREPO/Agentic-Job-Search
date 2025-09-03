@@ -25,4 +25,4 @@ COPY . .
 
 # Use the full module path
 
-CMD ["opentelemetry-instrument", "python", "job_search_agent.py"]
+CMD ["opentelemetry-instrument", "python", "StrandsAgents.py"]
