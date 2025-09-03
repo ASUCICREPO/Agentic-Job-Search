@@ -1,0 +1,96 @@
+digraph StudentCareerFlow {
+    rankdir=TB;
+    node [shape=box, style=filled, fontname="Arial", fontsize=12];
+    edge [fontname="Arial", fontsize=10];
+
+    // Start node
+    start [label="Student Visits\nCareer Services", shape=ellipse, fillcolor="#4ECDC4", fontsize=14];
+    
+    // Main decision
+    need_type [label="What do you need?", shape=diamond, fillcolor="#95E1D3", fontsize=12];
+    
+    // Agent selection
+    job_search [label="Find Jobs\n(Part-time, Full-time,\nInternships)", fillcolor="#A8E6CF"];
+    career_explore [label="Explore Careers\n& Majors", fillcolor="#FFB6C1"];
+    
+    // Job Search Agent Flow
+    job_agent [label="Job Search Assistant\nHelps find opportunities\nmatching your skills", fillcolor="#7FCDFF"];
+    upload_resume [label="Upload Resume\n(Optional)", fillcolor="#FFD93D"];
+    job_questions [label="Answer Questions\nAbout Preferences", fillcolor="#FFD93D"];
+    search_jobs [label="Search Job Database\nfor Matches", fillcolor="#98FB98"];
+    job_results [label="Receive Personalized\nJob Recommendations", fillcolor="#DDA0DD"];
+    
+    // Career Exploration Agent Flow  
+    career_agent [label="Career Exploration Assistant\nHelps discover career paths\nand academic majors", fillcolor="#FFA07A"];
+    explore_options [label="Explore Career\nPaths & Majors", fillcolor="#F0E68C"];
+    career_results [label="Receive Career\nRecommendations", fillcolor="#DDA0DD"];
+    
+    // Notification setup
+    want_updates [label="Want Daily\nJob Updates?", shape=diamond, fillcolor="#95E1D3"];
+    provide_email [label="Provide Email\nfor Updates", fillcolor="#FFAAA5"];
+    save_preferences [label="Save Your\nPreferences", fillcolor="#FF8B94"];
+    
+    // Daily notification flow
+    daily_system [label="Automated Daily System\nChecks for New Jobs", shape=ellipse, fillcolor="#FF6B9D"];
+    find_matches [label="Find New Job Matches\nfor Each Student", fillcolor="#87CEEB"];
+    send_emails [label="Send Personalized\nJob Updates via Email and Text", fillcolor="#98FB98"];
+    
+    // End nodes
+    end_session [label="Session Complete\nStudent Has Results", shape=ellipse, fillcolor="#4ECDC4"];
+    end_daily [label="Daily Updates\nDelivered", shape=ellipse, fillcolor="#4ECDC4"];
+    
+    // Main flow connections
+    start -> need_type;
+    
+    // Job search flow
+    need_type -> job_search [label="Need a Job"];
+    job_search -> job_agent;
+    job_agent -> upload_resume;
+    upload_resume -> job_questions;
+    job_questions -> search_jobs;
+    search_jobs -> job_results;
+    job_results -> want_updates;
+    
+    // Career exploration flow
+    need_type -> career_explore [label="Explore Careers"];
+    career_explore -> career_agent;
+    career_agent -> explore_options;
+    explore_options -> career_results;
+    career_results -> end_session;
+    
+    // Notification setup
+    want_updates -> provide_email [label="Yes"];
+    want_updates -> end_session [label="No"];
+    provide_email -> save_preferences;
+    save_preferences -> end_session;
+    
+    // Daily notification system
+    daily_system -> find_matches;
+    find_matches -> send_emails;
+    send_emails -> end_daily;
+    
+    // Styling clusters
+    subgraph cluster_job {
+        label="Job Search Experience";
+        style=dashed;
+        color="#2E86AB";
+        fontsize=14;
+        job_search; job_agent; upload_resume; job_questions; search_jobs; job_results;
+    }
+    
+    subgraph cluster_career {
+        label="Career Exploration Experience";
+        style=dashed;
+        color="#A23B72";
+        fontsize=14;
+        career_explore; career_agent; explore_options; career_results;
+    }
+    
+    subgraph cluster_daily {
+        label="Daily Notification System";
+        style=dashed;
+        color="#F18F01";
+        fontsize=14;
+        daily_system; find_matches; send_emails;
+    }
+}

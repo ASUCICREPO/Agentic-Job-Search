@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as os from 'os';
@@ -11,6 +12,11 @@ import * as customResources from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as ses from 'aws-cdk-lib/aws-ses';
 
 
 export class jobsearch1 extends cdk.Stack {
@@ -27,6 +33,14 @@ export class jobsearch1 extends cdk.Stack {
     
     const lambdaArchitecture = hostArchitecture === 'arm64' ? lambda.Architecture.ARM_64 : lambda.Architecture.X86_64;
     console.log(`Lambda architecture: ${lambdaArchitecture}`);
+
+    // Admin email for SES sender identity
+    const adminEmail = this.node.tryGetContext('adminEmail') || 'admin@yourcareerservices.com';
+    
+    // Create SES Email Identity
+    const senderIdentity = new ses.EmailIdentity(this, 'SenderIdentity', {
+      identity: ses.Identity.email(adminEmail),
+    });
 
     const JobsBucket = new s3.Bucket(this, 'JobsBucket', {
       enforceSSL: true,
@@ -68,6 +82,110 @@ export class jobsearch1 extends cdk.Stack {
       description: 'DynamoDB table for storing student profiles',
       exportName: 'StudentMemoryContractTableName',
     });
+
+    // SQS Queue for job notifications
+    const jobNotificationQueue = new sqs.Queue(this, 'JobNotificationQueue', {
+      visibilityTimeout: cdk.Duration.minutes(5),
+    });
+
+    // Batch Processor Lambda
+    const batchProcessorLambda = new lambda.Function(this, 'BatchProcessorLambda', {
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'batch_processor.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'batch-processor')),
+      timeout: cdk.Duration.minutes(5),
+      architecture: lambdaArchitecture,
+      environment: {
+        DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        SQS_QUEUE_URL: jobNotificationQueue.queueUrl,
+      },
+    });
+
+    // Grant permissions
+    StudentMemoryContractTable.grantReadData(batchProcessorLambda);
+    jobNotificationQueue.grantSendMessages(batchProcessorLambda);
+
+    // EventBridge rule to trigger at 1 AM daily
+    const dailyJobProcessingRule = new events.Rule(this, 'DailyJobProcessingRule', {
+      schedule: events.Schedule.cron({ minute: '0', hour: '1' }),
+      description: 'Trigger batch processor at 1 AM daily',
+    });
+
+    dailyJobProcessingRule.addTarget(new targets.LambdaFunction(batchProcessorLambda));
+
+    // SQS Processor Lambda to consume job notification messages
+    const sqsProcessorLambda = new lambda.Function(this, 'SQSProcessorLambda', {
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'sqs_processor.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'sqs-processor')),
+      timeout: cdk.Duration.minutes(5),
+      architecture: lambdaArchitecture,
+      environment: {
+        BEDROCK_AGENT_ID: 'your-agent-id', // TODO: Replace with actual agent ID
+        BEDROCK_AGENT_ALIAS_ID: 'your-agent-alias-id', // TODO: Replace with actual agent alias ID
+      },
+    });
+
+    // Grant permissions for SQS processor
+    sqsProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['bedrock:InvokeAgent'],
+      resources: ['*'],
+    }));
+
+    sqsProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ses:SendEmail'],
+      resources: ['*'],
+    }));
+
+    // Configure SQS as event source for the processor lambda
+    sqsProcessorLambda.addEventSource(new SqsEventSource(jobNotificationQueue, {
+      batchSize: 10,
+    }));
+
+    // SNS Topic for SMS notifications
+    const smsNotificationTopic = new sns.Topic(this, 'SMSNotificationTopic', {
+      displayName: 'Job Notification SMS Topic',
+    });
+
+    // Notification Sender Lambda for 9 AM daily notifications
+    const notificationSenderLambda = new lambda.Function(this, 'NotificationSenderLambda', {
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'notification_sender.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'notification-sender')),
+      timeout: cdk.Duration.minutes(5),
+      architecture: lambdaArchitecture,
+      environment: {
+        DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
+        SENDER_EMAIL: adminEmail,
+      },
+    });
+
+    // Grant permissions for notification sender
+    StudentMemoryContractTable.grantReadData(notificationSenderLambda);
+    smsNotificationTopic.grantPublish(notificationSenderLambda);
+    
+    notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+      resources: ['*'],
+    }));
+
+    notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['sns:Publish'],
+      resources: ['*'],
+    }));
+
+    // EventBridge rule to trigger notification sender at 9 AM daily
+    const dailyNotificationRule = new events.Rule(this, 'DailyNotificationRule', {
+      schedule: events.Schedule.cron({ minute: '0', hour: '9' }),
+      description: 'Send daily notifications at 9 AM',
+    });
+
+    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda));
 
     // Create IAM role with required permissions
     // const jobSearchAgentRole = new iam.Role(this, 'JobSearchAgentRole', {
