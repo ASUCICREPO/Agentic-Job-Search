@@ -15,6 +15,8 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as ses from 'aws-cdk-lib/aws-ses';
 
 
 export class jobsearch1 extends cdk.Stack {
@@ -111,7 +113,8 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        AGENT_ID: 'your-agent-id', // TODO: Replace with actual agent ID
+        BEDROCK_AGENT_ID: 'your-agent-id', // TODO: Replace with actual agent ID
+        BEDROCK_AGENT_ALIAS_ID: 'your-agent-alias-id', // TODO: Replace with actual agent alias ID
       },
     });
 
@@ -132,6 +135,48 @@ export class jobsearch1 extends cdk.Stack {
     sqsProcessorLambda.addEventSource(new SqsEventSource(jobNotificationQueue, {
       batchSize: 10,
     }));
+
+    // SNS Topic for SMS notifications
+    const smsNotificationTopic = new sns.Topic(this, 'SMSNotificationTopic', {
+      displayName: 'Job Notification SMS Topic',
+    });
+
+    // Notification Sender Lambda for 9 AM daily notifications
+    const notificationSenderLambda = new lambda.Function(this, 'NotificationSenderLambda', {
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'notification_sender.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'notification-sender')),
+      timeout: cdk.Duration.minutes(5),
+      architecture: lambdaArchitecture,
+      environment: {
+        DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
+      },
+    });
+
+    // Grant permissions for notification sender
+    StudentMemoryContractTable.grantReadData(notificationSenderLambda);
+    smsNotificationTopic.grantPublish(notificationSenderLambda);
+    
+    notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+      resources: ['*'],
+    }));
+
+    notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['sns:Publish'],
+      resources: ['*'],
+    }));
+
+    // EventBridge rule to trigger notification sender at 9 AM daily
+    const dailyNotificationRule = new events.Rule(this, 'DailyNotificationRule', {
+      schedule: events.Schedule.cron({ minute: '0', hour: '9' }),
+      description: 'Send daily notifications at 9 AM',
+    });
+
+    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda));
 
     // Create IAM role with required permissions
     // const jobSearchAgentRole = new iam.Role(this, 'JobSearchAgentRole', {
