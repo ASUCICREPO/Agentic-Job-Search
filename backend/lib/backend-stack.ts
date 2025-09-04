@@ -33,7 +33,7 @@ export class jobsearch1 extends cdk.Stack {
     console.log(`Lambda architecture: ${lambdaArchitecture}`);
 
     // Admin email for SES sender identity
-    const adminEmail = this.node.tryGetContext('adminEmail') || 'admin@yourcareerservices.com';
+    const adminEmail = this.node.tryGetContext('adminEmail');
     
     // Create SES Email Identity
     const senderIdentity = new ses.EmailIdentity(this, 'SenderIdentity', {
@@ -69,8 +69,7 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     const StudentMemoryContractTable = new dynamodb.Table(this, 'StudentMemoryContractTable', {
-      partitionKey: { name: 'sessionID', type: dynamodb.AttributeType.STRING },
-      sortKey:      { name: 'actionID',  type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'actionID', type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,  //for production have retain
     });
         
@@ -105,8 +104,8 @@ export class jobsearch1 extends cdk.Stack {
 
     // EventBridge rule to trigger at 1 AM daily
     const dailyJobProcessingRule = new events.Rule(this, 'DailyJobProcessingRule', {
-      schedule: events.Schedule.cron({ minute: '0', hour: '1' }),
-      description: 'Trigger batch processor at 1 AM daily',
+      schedule: events.Schedule.cron({ minute: '0', hour: '8' }),
+      description: 'Trigger batch processor at 1 AM MST daily',
     });
 
     dailyJobProcessingRule.addTarget(new targets.LambdaFunction(batchProcessorLambda));
@@ -179,8 +178,8 @@ export class jobsearch1 extends cdk.Stack {
 
     // EventBridge rule to trigger notification sender at 9 AM daily
     const dailyNotificationRule = new events.Rule(this, 'DailyNotificationRule', {
-      schedule: events.Schedule.cron({ minute: '0', hour: '9' }),
-      description: 'Send daily notifications at 9 AM',
+      schedule: events.Schedule.cron({ minute: '0', hour: '16' }),
+      description: 'Send daily notifications at 9 AM MST',
     });
 
     dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda)); 
