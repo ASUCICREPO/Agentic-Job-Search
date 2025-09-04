@@ -16,7 +16,6 @@ from bedrock_agentcore.memory import MemoryClient
 
 from strands import Agent, tool
 from strands_tools import retrieve
-from functools import partial
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
@@ -26,13 +25,8 @@ from tools import get_student_profile, save_student_profile, sanitize_email_for_
 AWS_REGION = os.getenv('AWS_REGION')
 AGENTCORE_MEMORY_ID = os.getenv('AGENTCORE_MEMORY_ID')
 AGENTCORE_USER_PREFERENCE_STRATEGY_ID = os.getenv('AGENTCORE_USER_PREFERENCE_STRATEGY_ID')
-JOB_SEARCH_KB = os.getenv('JOB_SEARCH_KB')  # Job search KB ID for retrieve calls
-CAREER_RESOURCE_KB = os.getenv('CAREER_RESOURCE_KB')  # Career resource KB ID for retrieve calls
-
-if not JOB_SEARCH_KB:
-    raise RuntimeError("Missing env var JOB_SEARCH_KB")
-if not CAREER_RESOURCE_KB:
-    raise RuntimeError("Missing env var CAREER_RESOURCE_KB")
+JOB_SEARCH_KB = os.getenv('JOB_SEARCH_KB') # Job search knowledge base ID - agent should use this for retrieve tool calls
+CARRIER_RESOURCE_KB = os.getenv('CARRIER_RESOURCE_KB')  # Carrier resource knowledge base ID for additional resources
 
 # Specialized Agent Tools using the "Agents as Tools" pattern
 
@@ -118,9 +112,8 @@ def job_search_agent_tool(query: str, resume_text: str = "", session_id: str = "
         # Get memory tools
         memory_tools = _get_memory_tools(session_id, email)
 
-        # Create job-specific retrieve tool bound to job search KB
-        job_kb_retrieve = partial(retrieve, knowledgeBaseId=JOB_SEARCH_KB)
-        tools = [job_kb_retrieve, save_student_profile, get_student_profile] + memory_tools
+        # Combine all available tools
+        tools = [retrieve, save_student_profile, get_student_profile] + memory_tools
 
         # Create a specialized job search agent
         job_search_agent = Agent(
@@ -128,7 +121,7 @@ def job_search_agent_tool(query: str, resume_text: str = "", session_id: str = "
             system_prompt=(
                 "You are a specialized Job Search Agent focusing on finding relevant job opportunities with memory access.\n\n"
                 "Available Tools:\n"
-                f"• job_kb_retrieve: Search job postings from job search knowledge base\n"
+                f"• retrieve: Search job postings using knowledgeBaseId: '{JOB_SEARCH_KB}'\n"
                 "• get_student_profile: Check user profile and notification preferences\n"
                 "• save_student_profile: Store email and notification preferences\n"
                 "• Memory tools: Access conversation history, previous job searches, and stored preferences\n\n"
@@ -191,9 +184,8 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
         # Get memory tools
         memory_tools = _get_memory_tools(session_id, email)
 
-        # Create career-specific retrieve tool bound to career resource KB
-        career_kb_retrieve = partial(retrieve, knowledgeBaseId=CAREER_RESOURCE_KB)
-        tools = [career_kb_retrieve, save_student_profile, get_student_profile] + memory_tools
+        # Combine all available tools
+        tools = [retrieve, save_student_profile, get_student_profile] + memory_tools
 
         # Create a specialized career advice agent
         career_advice_agent = Agent(
@@ -201,7 +193,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
                 f"Available Tools:\n"
-                f"• career_kb_retrieve: Access career resources from career knowledge base\n"
+                f"• retrieve: Access career resources using knowledgeBaseId: '{CARRIER_RESOURCE_KB}'\n"
                 "• Memory tools: Access conversation history, previous advice sessions, and stored preferences\n\n"
                 "MEMORY-AWARE CAREER GUIDANCE WORKFLOW:\n"
                 "1) Review user's previous career advice sessions and stored preferences\n"
@@ -216,8 +208,6 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 "• Career transition strategies (consider user's current career trajectory)\n"
                 "• Skill development and learning paths (based on user's skill assessment history)\n"
                 "• Networking and professional development (reference past networking activities)\n"
-                "• Salary negotiation advice (use stored salary expectations and history)\n"
-                "• Work-life balance guidance (consider user's previous balance discussions)\n\n"
                 "MEMORY INTEGRATION:\n"
                 "• Always reference previous career advice sessions and user preferences\n"
                 "• Consider user's career goals and objectives from stored information\n"
