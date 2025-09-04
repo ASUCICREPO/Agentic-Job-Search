@@ -208,8 +208,6 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 "• Career transition strategies (consider user's current career trajectory)\n"
                 "• Skill development and learning paths (based on user's skill assessment history)\n"
                 "• Networking and professional development (reference past networking activities)\n"
-                "• Salary negotiation advice (use stored salary expectations and history)\n"
-                "• Work-life balance guidance (consider user's previous balance discussions)\n\n"
                 "MEMORY INTEGRATION:\n"
                 "• Always reference previous career advice sessions and user preferences\n"
                 "• Consider user's career goals and objectives from stored information\n"
