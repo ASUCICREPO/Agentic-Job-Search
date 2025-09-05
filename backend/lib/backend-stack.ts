@@ -45,6 +45,12 @@ export class jobsearch1 extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN, 
     });
 
+    // S3 bucket for resume storage and processing
+    const resumeBucket = new s3.Bucket(this, 'ResumeBucket', {
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
     const kb = new bedrock.GraphKnowledgeBase(this, 'JobKnowledgeBase', {
       description: 'Knowledge base with jobs from multiple sources - contains all job listings updated daily',
       embeddingModel: bedrock.BedrockFoundationModel.TITAN_EMBED_TEXT_V2_1024,
@@ -183,7 +189,31 @@ export class jobsearch1 extends cdk.Stack {
       description: 'Send daily notifications at 9 AM',
     });
 
-    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda)); 
+    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda));
+
+    // Resume Parser Lambda using Bedrock Data Automation
+    const resumeParserLambda = new lambda.Function(this, 'ResumeParserLambda', {
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'resume_parser.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'resume-parser')),
+      timeout: cdk.Duration.minutes(5),
+      architecture: lambdaArchitecture,
+      environment: {
+        BDA_PROJECT_ARN: `arn:aws:bedrock:${aws_region}:${accountId}:data-automation-project/career_services_resume_bda`,
+      },
+    });
+
+    // Grant permissions for resume parser
+    resumeBucket.grantReadWrite(resumeParserLambda);
+    
+    resumeParserLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'bedrock:InvokeDataAutomationAsync',
+        'bedrock:GetDataAutomationStatus',
+      ],
+      resources: ['*'],
+    }));
     
     new cdk.CfnOutput(this, 'DockerImageURI', {
       value: jobSearchAgentImage.imageUri,
@@ -195,6 +225,18 @@ export class jobsearch1 extends cdk.Stack {
       value: kb.knowledgeBaseId,
       description: 'Knowledge Base ID for job search (passed as build arg to Docker)',
       exportName: 'JobSearchKnowledgeBaseId',
+    });
+
+    new cdk.CfnOutput(this, 'ResumeBucketName', {
+      value: resumeBucket.bucketName,
+      description: 'S3 bucket for resume storage and processing',
+      exportName: 'ResumeBucketName',
+    });
+
+    new cdk.CfnOutput(this, 'ResumeParserLambdaArn', {
+      value: resumeParserLambda.functionArn,
+      description: 'Resume Parser Lambda function ARN',
+      exportName: 'ResumeParserLambdaArn',
     });
 
 

@@ -23,13 +23,12 @@ from tools import get_student_profile, save_student_profile, sanitize_email_for_
 
 # Environment Variables
 AWS_REGION = os.getenv('AWS_REGION')
-AGENTCORE_MEMORY_ID = os.getenv('AGENTCORE_MEMORY_ID')
-AGENTCORE_USER_PREFERENCE_STRATEGY_ID = os.getenv('AGENTCORE_USER_PREFERENCE_STRATEGY_ID')
-JOB_SEARCH_KB = os.getenv('JOB_SEARCH_KB') # Job search knowledge base ID - agent should use this for retrieve tool calls
+AGENTCORE_MEMORY_ID = os.get_env('AGENTCORE_MEMORY_ID')  # Memory ID for Bedrock AgentCore
+AGENTCORE_USER_PREFERENCE_STRATEGY_ID = os.getenv('AGENTCORE_USER_PREFERENCE_STRATEGY_ID', 'UserPreferencesStrategy')
+JOB_SEARCH_KB = os.get_env('JOB_SEARCH_KB')  # Job search knowledge base ID for job postings
 CARRIER_RESOURCE_KB = os.getenv('CARRIER_RESOURCE_KB')  # Carrier resource knowledge base ID for additional resources
 
 # Specialized Agent Tools using the "Agents as Tools" pattern
-
 def _get_memory_tools(session_id: str = "", email: str = ""):
     """Helper function to get memory tools for agents."""
     if not session_id and not email:
