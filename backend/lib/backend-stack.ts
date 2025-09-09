@@ -22,6 +22,11 @@ export class jobsearch1 extends cdk.Stack {
     super(scope, id, props);
 
     // basic information retrieval before writing resources
+    // Admin email for SES sender identity
+    const adminEmail = this.node.tryGetContext('adminEmail');
+    if(!adminEmail)
+      throw new Error("Missing required context variable: adminEmail. Please provide 'adminEmail' in CDK context (e.g., cdk deploy -c adminEmail=your@email.com)");
+
     const aws_region = cdk.Stack.of(this).region;
     const accountId = cdk.Stack.of(this).account;
     console.log(`AWS Region: ${aws_region}`);
@@ -32,8 +37,7 @@ export class jobsearch1 extends cdk.Stack {
     const lambdaArchitecture = hostArchitecture === 'arm64' ? lambda.Architecture.ARM_64 : lambda.Architecture.X86_64;
     console.log(`Lambda architecture: ${lambdaArchitecture}`);
 
-    // Admin email for SES sender identity
-    const adminEmail = this.node.tryGetContext('adminEmail');
+    
     
     // Create SES Email Identity
     const senderIdentity = new ses.EmailIdentity(this, 'SenderIdentity', {
@@ -44,6 +48,36 @@ export class jobsearch1 extends cdk.Stack {
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN, 
     });
+
+    const ResumeBucket = new s3.Bucket(this, 'ResumeBucket', {
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN, 
+    });
+
+
+    // Lambda function with S3 bucket name from environment variable (ResumeBucket)
+    const resumeProcessorLambda = new lambda.Function(this, 'ResumeProcessorLambda', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(
+        // Placeholder code, to be implemented later
+        'def handler(event, context):\n    pass\n'
+      ),
+      environment: {
+        RESUME_BUCKET: ResumeBucket.bucketName,
+      },
+      architecture: lambdaArchitecture,
+    });
+
+    // Grant Lambda permissions to access the ResumeBucket
+    ResumeBucket.grantReadWrite(resumeProcessorLambda);
+
+    // Grant Lambda permissions to invoke Bedrock models
+    resumeProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['bedrock:InvokeModel'],
+      resources: ['*'], // You can restrict to specific model ARNs if needed
+    }));
 
     const kb = new bedrock.GraphKnowledgeBase(this, 'JobKnowledgeBase', {
       description: 'Knowledge base with jobs from multiple sources - contains all job listings updated daily',
@@ -80,6 +114,20 @@ export class jobsearch1 extends cdk.Stack {
       exportName: 'StudentMemoryContractTableName',
     });
 
+    // Job Recommendations Table
+    // Primary key: email#job_type (e.g., "john@gmail.com#software-engineer")
+    const JobRecommendationsTable = new dynamodb.Table(this, 'JobRecommendationsTable', {
+      partitionKey: {
+        name: 'userJobKey',
+        type: dynamodb.AttributeType.STRING
+      },
+      sortKey: {
+        name: 'createdAt',
+        type: dynamodb.AttributeType.STRING
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // for production have retain
+    });
+
     // SQS Queue for job notifications
     const jobNotificationQueue = new sqs.Queue(this, 'JobNotificationQueue', {
       visibilityTimeout: cdk.Duration.minutes(5),
@@ -94,12 +142,14 @@ export class jobsearch1 extends cdk.Stack {
       architecture: lambdaArchitecture,
       environment: {
         DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
         SQS_QUEUE_URL: jobNotificationQueue.queueUrl,
       },
     });
 
     // Grant permissions
     StudentMemoryContractTable.grantReadData(batchProcessorLambda);
+    JobRecommendationsTable.grantReadWriteData(batchProcessorLambda);
     jobNotificationQueue.grantSendMessages(batchProcessorLambda);
 
     // EventBridge rule to trigger at 1 AM daily
@@ -155,6 +205,7 @@ export class jobsearch1 extends cdk.Stack {
       architecture: lambdaArchitecture,
       environment: {
         DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
         SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
         SENDER_EMAIL: adminEmail,
       },
@@ -162,6 +213,7 @@ export class jobsearch1 extends cdk.Stack {
 
     // Grant permissions for notification sender
     StudentMemoryContractTable.grantReadData(notificationSenderLambda);
+    JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
     smsNotificationTopic.grantPublish(notificationSenderLambda);
     
     notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
@@ -196,6 +248,18 @@ export class jobsearch1 extends cdk.Stack {
       exportName: 'JobSearchKnowledgeBaseId',
     });
 
+    // Export the table name for reference
+    new cdk.CfnOutput(this, 'JobRecommendationsTableName', {
+      value: JobRecommendationsTable.tableName,
+      description: 'DynamoDB table for storing job recommendations per user',
+      exportName: 'JobRecommendationsTableName',
+    });
+
+  new cdk.CfnOutput(this, 'ResumeBucketName', {
+    value: ResumeBucket.bucketName,
+    description: 'S3 bucket for storing user resumes',
+    exportName: 'ResumeBucketName',
+  });
 
   }
 }
