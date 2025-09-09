@@ -89,6 +89,16 @@ export class jobsearch1 extends cdk.Stack {
       architecture: lambdaArchitecture,
     });
 
+    // Add Function URL for direct frontend access
+    const saveProfileUrl = saveProfile.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      cors: {
+        allowedOrigins: ['*'],
+        allowedMethods: [lambda.HttpMethod.POST],
+        allowedHeaders: ['Content-Type']
+      }
+    });
+
     // Lambda function with S3 bucket name from environment variable (ResumeBucket)
     const resumeProcessorLambda = new lambda.Function(this, 'ResumeProcessorLambda', {
       runtime: lambda.Runtime.PYTHON_3_12,
@@ -272,6 +282,12 @@ export class jobsearch1 extends cdk.Stack {
     value: ResumeBucket.bucketName,
     description: 'S3 bucket for storing user resumes',
     exportName: 'ResumeBucketName',
+  });
+
+  new cdk.CfnOutput(this, 'SaveProfileUrl', {
+    value: saveProfileUrl.url,
+    description: 'Lambda Function URL for save profile endpoint',
+    exportName: 'SaveProfileUrl',
   });
 
   }
