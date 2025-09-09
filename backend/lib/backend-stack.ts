@@ -78,6 +78,16 @@ export class jobsearch1 extends cdk.Stack {
       exportName: 'StudentProfileTable',
     });
 
+    const saveProfile = new lambda.Function(this, 'saveProfile', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.lambda_handler',
+      timeout: cdk.Duration.minutes(5),
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'save-profile')),
+      environment: {
+      STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
+      },
+      architecture: lambdaArchitecture,
+    });
 
     // Lambda function with S3 bucket name from environment variable (ResumeBucket)
     const resumeProcessorLambda = new lambda.Function(this, 'ResumeProcessorLambda', {
@@ -87,6 +97,7 @@ export class jobsearch1 extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'resume-parser')),
       environment: {
         RESUME_BUCKET: ResumeBucket.bucketName,
+        SAVE_PROFILE_FUNCTION_NAME: saveProfile.functionName,
       },
       architecture: lambdaArchitecture,
     });
@@ -101,16 +112,11 @@ export class jobsearch1 extends cdk.Stack {
       resources: ['*'], // You can restrict to specific model ARNs if needed
     }));
 
-    const saveProfile = new lambda.Function(this, 'saveProfile', {
-      runtime: lambda.Runtime.PYTHON_3_12,
-      handler: 'index.handler',
-      timeout: cdk.Duration.minutes(5),
-      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'save-profile')),
-      environment: {
-      STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
-      },
-      architecture: lambdaArchitecture,
-    });
+    // Grant resume parser permission to invoke save profile Lambda
+    saveProfile.grantInvoke(resumeProcessorLambda);
+
+    // Grant save-profile Lambda permissions to write to DynamoDB
+    StudentProfileTable.grantWriteData(saveProfile);
 
     const kb = new bedrock.GraphKnowledgeBase(this, 'JobKnowledgeBase', {
       description: 'Knowledge base with jobs from multiple sources - contains all job listings updated daily',

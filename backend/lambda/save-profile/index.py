@@ -2,40 +2,47 @@ import json
 import boto3
 import os
 from typing import Dict, Any
-
-dynamodb = boto3.resource('dynamodb')
+from datetime import datetime
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
     Lambda function to save student profile data to DynamoDB
     """
     try:
-        table_name = os.environ.get('DYNAMODB_TABLE_NAME')
+        table_name = os.environ.get('STUDENT_PROFILE_TABLE_NAME')
         if not table_name:
-            raise ValueError("DYNAMODB_TABLE_NAME environment variable not set")
+            raise ValueError("STUDENT_PROFILE_TABLE_NAME environment variable not set")
         
+        dynamodb = boto3.resource('dynamodb')
         table = dynamodb.Table(table_name)
         
-        # Extract data from event
-        session_id = event.get('session_id')
-        action_id = event.get('action_id')
-        email = event.get('email')
-        opt_in_status = event.get('opt_in_status', False)
-        notification_method = event.get('notification_method', 'email')
-        resume_data = event.get('resume_data')
+        # Extract parsed resume data
+        parsed_data = event.get('parsed_data', {})
         
-        # Save to DynamoDB with proper schema
+        # Validate required fields
+        if not parsed_data.get('email'):
+            raise ValueError("Email is required")
+        
+        # Use email as actionID with underscore replacement
+        email = parsed_data.get('email')
+        action_id = ''.join('_' if c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_' else c for c in email)
+        
+        # Create DynamoDB item
         item = {
-            'sessionID': session_id,
             'actionID': action_id,
             'email': email,
-            'optInStatus': opt_in_status,
-            'notificationMethod': notification_method,
-            'timestamp': context.aws_request_id
+            'fullName': parsed_data.get('fullName', ''),
+            'location': parsed_data.get('location', ''),
+            'headline': parsed_data.get('headline', ''),
+            'aboutMe': parsed_data.get('aboutMe', ''),
+            'education': parsed_data.get('education', ''),
+            'experience': parsed_data.get('experience', ''),
+            'phone': parsed_data.get('phone', ''),
+            'interests': parsed_data.get('interests', ''),
+            'linkedin': parsed_data.get('linkedin', ''),
+            'notificationMethod': event.get('notification_method', 'email'),
+            'timestamp': datetime.utcnow().isoformat()
         }
-        
-        if resume_data:
-            item['resume_data'] = resume_data
         
         table.put_item(Item=item)
         
@@ -43,7 +50,6 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             'statusCode': 200,
             'body': json.dumps({
                 'message': 'Student profile saved successfully',
-                'session_id': session_id,
                 'action_id': action_id
             })
         }
