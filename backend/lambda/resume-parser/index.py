@@ -1,61 +1,76 @@
 import json
 import boto3
-import os
 from typing import Dict, Any
-import PyPDF2
-from io import BytesIO
 
 bedrock_runtime = boto3.client('bedrock-runtime')
 s3_client = boto3.client('s3')
-lambda_client = boto3.client('lambda')
 
-def extract_text_from_pdf(s3_uri: str) -> str:
-    """Extract text from PDF stored in S3"""
+def extract_and_parse_resume(s3_uri: str) -> Dict[str, Any]:
+    """Extract and parse resume using Nova Pro document understanding"""
+    if not s3_uri.startswith('s3://') or '/' not in s3_uri[5:]:
+        raise ValueError("Invalid S3 URI format")
     bucket, key = s3_uri.replace('s3://', '').split('/', 1)
-    
     response = s3_client.get_object(Bucket=bucket, Key=key)
-    pdf_content = response['Body'].read()
+    doc_bytes = response['Body'].read()
     
-    pdf_reader = PyPDF2.PdfReader(BytesIO(pdf_content))
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text() + "\n"
-    
-    return text.strip()
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "document": {
+                        "format": "pdf",
+                        "name": "resume_document",
+                        "source": {
+                            "bytes": doc_bytes
+                        }
+                    }
+                },
+                {
+                    "text": """Extract structured information from this resume and return ONLY a valid JSON object.
 
-def parse_with_nova_pro(text: str) -> str:
-    """Parse resume text using Nova Pro"""
-    
-    prompt = f"""Extract structured information from this resume text and return as JSON:
+IMPORTANT: Your response must start with { and end with }. Do not include any text before or after the JSON.
 
-{text}
+Return a JSON object with these exact fields. If any field cannot be found in the resume, use "N/A" as the value:
 
-Return a JSON object with these fields:
-- name: Full name
-- email: Email address
-- phone: Phone number
-- skills: Array of skills
-- experience: Array of work experience objects with company, position, duration
-- education: Array of education objects with institution, degree, year
-- summary: Brief professional summary
+{
+  "fullName": "Full Name or N/A",
+  "location": "City, State or N/A", 
+  "headline": "Professional headline or N/A",
+  "aboutMe": "Brief professional summary (100-200 chars) or N/A",
+  "education": "School name and degree or N/A",
+  "experience": "Work experience summary or N/A",
+  "email": "Email address or N/A",
+  "phone": "Phone number or N/A",
+  "interests": "Interests/hobbies or N/A",
+  "linkedin": "LinkedIn profile URL or N/A"
+}
 
-JSON:"""
-    
-    body = {
-        "inputText": prompt,
-        "textGenerationConfig": {
-            "maxTokenCount": 2000,
-            "temperature": 0.1
+Return only the JSON object:"""
+                }
+            ]
         }
-    }
+    ]
     
-    response = bedrock_runtime.invoke_model(
-        modelId='amazon.nova-pro-v1:0',
-        body=json.dumps(body)
+    response = bedrock_runtime.converse(
+        modelId='us.amazon.nova-pro-v1:0',
+        messages=messages
     )
     
-    result = json.loads(response['body'].read())
-    return result['results'][0]['outputText']
+    response_text = response['output']['message']['content'][0]['text'].strip()
+    
+    # Ensure response starts with { and ends with }
+    if not response_text.startswith('{'):
+        start_idx = response_text.find('{')
+        if start_idx != -1:
+            response_text = response_text[start_idx:]
+    
+    if not response_text.endswith('}'):
+        end_idx = response_text.rfind('}')
+        if end_idx != -1:
+            response_text = response_text[:end_idx + 1]
+    
+    return json.loads(response_text)
 
 def handler(event, context):
     """
@@ -75,19 +90,15 @@ def handler(event, context):
         if not s3_path:
             raise ValueError("Missing required parameter: s3_path")
         
-        # Extract text from PDF
-        resume_text = extract_text_from_pdf(s3_path)
+        # Extract and parse resume using Nova Pro
+        parsed_data = extract_and_parse_resume(s3_path)
         
-        # Parse with Nova Pro
-        parsed_data = parse_with_nova_pro(resume_text)
-        parsed_json = json.loads(parsed_data)
-        
-        # Return parsed data for frontend form population
+        # Return parsed data
         return {
             'statusCode': 200,
             'body': json.dumps({
                 'success': True,
-                'parsed_data': parsed_json,
+                'parsed_data': parsed_data,
                 'message': 'Resume parsed successfully'
             })
         }
