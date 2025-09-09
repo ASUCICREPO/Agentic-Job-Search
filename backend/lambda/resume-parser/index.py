@@ -1,11 +1,9 @@
 import json
 import boto3
-import os
 from typing import Dict, Any
 
 bedrock_runtime = boto3.client('bedrock-runtime')
 s3_client = boto3.client('s3')
-lambda_client = boto3.client('lambda')
 
 def extract_and_parse_resume(s3_uri: str) -> Dict[str, Any]:
     """Extract and parse resume using Nova Pro document understanding"""
@@ -29,21 +27,26 @@ def extract_and_parse_resume(s3_uri: str) -> Dict[str, Any]:
                     }
                 },
                 {
-                    "text": """Extract structured information from this resume and return as JSON:
+                    "text": """Extract structured information from this resume and return ONLY a valid JSON object.
 
-Return a JSON object with these fields:
-- fullName: Full Name
-- location: Location (City, State)
-- headline: Headline (Your First Name)
-- aboutMe: About Me (100–200 Character Description)
-- education: Education (Select a School)
-- experience: Experience (List your Experience Here)
-- email: Email
-- phone: Phone Number
-- interests: Interests (List Interests here)
-- linkedin: LinkedIn Profile URL
+IMPORTANT: Your response must start with { and end with }. Do not include any text before or after the JSON.
 
-JSON:"""
+Return a JSON object with these exact fields. If any field cannot be found in the resume, use "N/A" as the value:
+
+{
+  "fullName": "Full Name or N/A",
+  "location": "City, State or N/A", 
+  "headline": "Professional headline or N/A",
+  "aboutMe": "Brief professional summary (100-200 chars) or N/A",
+  "education": "School name and degree or N/A",
+  "experience": "Work experience summary or N/A",
+  "email": "Email address or N/A",
+  "phone": "Phone number or N/A",
+  "interests": "Interests/hobbies or N/A",
+  "linkedin": "LinkedIn profile URL or N/A"
+}
+
+Return only the JSON object:"""
                 }
             ]
         }
@@ -54,7 +57,20 @@ JSON:"""
         messages=messages
     )
     
-    return json.loads(response['output']['message']['content'][0]['text'])
+    response_text = response['output']['message']['content'][0]['text'].strip()
+    
+    # Ensure response starts with { and ends with }
+    if not response_text.startswith('{'):
+        start_idx = response_text.find('{')
+        if start_idx != -1:
+            response_text = response_text[start_idx:]
+    
+    if not response_text.endswith('}'):
+        end_idx = response_text.rfind('}')
+        if end_idx != -1:
+            response_text = response_text[:end_idx + 1]
+    
+    return json.loads(response_text)
 
 def handler(event, context):
     """
@@ -77,25 +93,13 @@ def handler(event, context):
         # Extract and parse resume using Nova Pro
         parsed_data = extract_and_parse_resume(s3_path)
         
-        # Automatically save profile to DynamoDB
-        save_profile_payload = {
-            'parsed_data': parsed_data,
-            'notification_method': 'email'
-        }
-        
-        lambda_client.invoke(
-            FunctionName=os.environ.get('SAVE_PROFILE_FUNCTION_NAME'),
-            InvocationType='Event',
-            Payload=json.dumps(save_profile_payload)
-        )
-        
-        # Return parsed data for frontend form population
+        # Return parsed data
         return {
             'statusCode': 200,
             'body': json.dumps({
                 'success': True,
                 'parsed_data': parsed_data,
-                'message': 'Resume parsed and profile saved successfully'
+                'message': 'Resume parsed successfully'
             })
         }
         
