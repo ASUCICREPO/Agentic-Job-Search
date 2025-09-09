@@ -37,8 +37,6 @@ export class jobsearch1 extends cdk.Stack {
     const lambdaArchitecture = hostArchitecture === 'arm64' ? lambda.Architecture.ARM_64 : lambda.Architecture.X86_64;
     console.log(`Lambda architecture: ${lambdaArchitecture}`);
 
-    
-    
     // Create SES Email Identity
     const senderIdentity = new ses.EmailIdentity(this, 'SenderIdentity', {
       identity: ses.Identity.email(adminEmail),
@@ -54,15 +52,39 @@ export class jobsearch1 extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN, 
     });
 
+    const StudentProfileTable = new dynamodb.Table(this, 'StudentProfileTable', {
+      partitionKey: { name: 'actionID', type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,  //for production have retain
+    });
+
+    // Job Recommendations Table
+    // Primary key: email#job_type (e.g., "john@gmail.com#software-engineer")
+    const JobRecommendationsTable = new dynamodb.Table(this, 'JobRecommendationsTable', {
+      partitionKey: {
+        name: 'userJobKey',
+        type: dynamodb.AttributeType.STRING
+      },
+      sortKey: {
+        name: 'createdAt',
+        type: dynamodb.AttributeType.STRING
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // for production have retain
+    });
+        
+    // Export the table name for reference
+    new cdk.CfnOutput(this, 'StudentProfileTableOutput', {
+      value: StudentProfileTable.tableName,
+      description: 'DynamoDB table for storing student profiles',
+      exportName: 'StudentProfileTable',
+    });
+
 
     // Lambda function with S3 bucket name from environment variable (ResumeBucket)
     const resumeProcessorLambda = new lambda.Function(this, 'ResumeProcessorLambda', {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(
-        // Placeholder code, to be implemented later
-        'def handler(event, context):\n    pass\n'
-      ),
+      timeout: cdk.Duration.minutes(5),
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'resume-parser')),
       environment: {
         RESUME_BUCKET: ResumeBucket.bucketName,
       },
@@ -70,7 +92,7 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     // Grant Lambda permissions to access the ResumeBucket
-    ResumeBucket.grantReadWrite(resumeProcessorLambda);
+    ResumeBucket.grantRead(resumeProcessorLambda);
 
     // Grant Lambda permissions to invoke Bedrock models
     resumeProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
@@ -78,6 +100,17 @@ export class jobsearch1 extends cdk.Stack {
       actions: ['bedrock:InvokeModel'],
       resources: ['*'], // You can restrict to specific model ARNs if needed
     }));
+
+    const saveProfile = new lambda.Function(this, 'saveProfile', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      timeout: cdk.Duration.minutes(5),
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'save-profile')),
+      environment: {
+      STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
+      },
+      architecture: lambdaArchitecture,
+    });
 
     const kb = new bedrock.GraphKnowledgeBase(this, 'JobKnowledgeBase', {
       description: 'Knowledge base with jobs from multiple sources - contains all job listings updated daily',
@@ -102,32 +135,6 @@ export class jobsearch1 extends cdk.Stack {
         }),
     });
 
-    const StudentMemoryContractTable = new dynamodb.Table(this, 'StudentMemoryContractTable', {
-      partitionKey: { name: 'actionID', type: dynamodb.AttributeType.STRING },
-      removalPolicy: cdk.RemovalPolicy.DESTROY,  //for production have retain
-    });
-        
-    // Export the table name for reference
-    new cdk.CfnOutput(this, 'StudentMemoryContractTableName', {
-      value: StudentMemoryContractTable.tableName,
-      description: 'DynamoDB table for storing student profiles',
-      exportName: 'StudentMemoryContractTableName',
-    });
-
-    // Job Recommendations Table
-    // Primary key: email#job_type (e.g., "john@gmail.com#software-engineer")
-    const JobRecommendationsTable = new dynamodb.Table(this, 'JobRecommendationsTable', {
-      partitionKey: {
-        name: 'userJobKey',
-        type: dynamodb.AttributeType.STRING
-      },
-      sortKey: {
-        name: 'createdAt',
-        type: dynamodb.AttributeType.STRING
-      },
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // for production have retain
-    });
-
     // SQS Queue for job notifications
     const jobNotificationQueue = new sqs.Queue(this, 'JobNotificationQueue', {
       visibilityTimeout: cdk.Duration.minutes(5),
@@ -141,14 +148,14 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
         JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
         SQS_QUEUE_URL: jobNotificationQueue.queueUrl,
       },
     });
 
     // Grant permissions
-    StudentMemoryContractTable.grantReadData(batchProcessorLambda);
+    StudentProfileTable.grantReadData(batchProcessorLambda);
     JobRecommendationsTable.grantReadWriteData(batchProcessorLambda);
     jobNotificationQueue.grantSendMessages(batchProcessorLambda);
 
@@ -204,7 +211,7 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
         JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
         SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
         SENDER_EMAIL: adminEmail,
@@ -212,7 +219,7 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     // Grant permissions for notification sender
-    StudentMemoryContractTable.grantReadData(notificationSenderLambda);
+    StudentProfileTable.grantReadData(notificationSenderLambda);
     JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
     smsNotificationTopic.grantPublish(notificationSenderLambda);
     
