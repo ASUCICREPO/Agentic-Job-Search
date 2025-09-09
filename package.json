@@ -1,9 +1,0 @@
-{
-  "dependencies": {
-    "@cdklabs/generative-ai-cdk-constructs": "^0.1.309",
-    "aws-cdk-lib": "^2.212.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.3.0"
-  }
-}
