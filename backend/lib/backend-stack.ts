@@ -112,6 +112,16 @@ export class jobsearch1 extends cdk.Stack {
       architecture: lambdaArchitecture,
     });
 
+    // Add Function URL for direct frontend access to resume parser
+    const resumeProcessorUrl = resumeProcessorLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      cors: {
+        allowedOrigins: ['*'],
+        allowedMethods: [lambda.HttpMethod.POST],
+        allowedHeaders: ['Content-Type']
+      }
+    });
+
     // Grant Lambda permissions to access the ResumeBucket
     ResumeBucket.grantRead(resumeProcessorLambda);
 
@@ -159,7 +169,7 @@ export class jobsearch1 extends cdk.Stack {
     // Batch Processor Lambda
     const batchProcessorLambda = new lambda.Function(this, 'BatchProcessorLambda', {
       runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'batch_processor.lambda_handler',
+      handler: 'index.lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'batch-processor')),
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
@@ -186,7 +196,7 @@ export class jobsearch1 extends cdk.Stack {
     // SQS Processor Lambda to consume job notification messages
     const sqsProcessorLambda = new lambda.Function(this, 'SQSProcessorLambda', {
       runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'sqs_processor.lambda_handler',
+      handler: 'index.lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'sqs-processor')),
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
@@ -222,7 +232,7 @@ export class jobsearch1 extends cdk.Stack {
     // Notification Sender Lambda for 9 AM daily notifications
     const notificationSenderLambda = new lambda.Function(this, 'NotificationSenderLambda', {
       runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'notification_sender.lambda_handler',
+      handler: 'index.lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'notification-sender')),
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
@@ -288,6 +298,12 @@ export class jobsearch1 extends cdk.Stack {
     value: saveProfileUrl.url,
     description: 'Lambda Function URL for save profile endpoint',
     exportName: 'SaveProfileUrl',
+  });
+
+  new cdk.CfnOutput(this, 'ResumeProcessorUrl', {
+    value: resumeProcessorUrl.url,
+    description: 'Lambda Function URL for resume parser endpoint',
+    exportName: 'ResumeProcessorUrl',
   });
 
   }
