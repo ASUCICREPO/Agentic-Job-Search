@@ -22,6 +22,11 @@ export class jobsearch1 extends cdk.Stack {
     super(scope, id, props);
 
     // basic information retrieval before writing resources
+    // Admin email for SES sender identity
+    const adminEmail = this.node.tryGetContext('adminEmail');
+    if(!adminEmail)
+      throw new Error("Missing required context variable: adminEmail. Please provide 'adminEmail' in CDK context (e.g., cdk deploy -c adminEmail=your@email.com)");
+
     const aws_region = cdk.Stack.of(this).region;
     const accountId = cdk.Stack.of(this).account;
     console.log(`AWS Region: ${aws_region}`);
@@ -32,9 +37,6 @@ export class jobsearch1 extends cdk.Stack {
     const lambdaArchitecture = hostArchitecture === 'arm64' ? lambda.Architecture.ARM_64 : lambda.Architecture.X86_64;
     console.log(`Lambda architecture: ${lambdaArchitecture}`);
 
-    // Admin email for SES sender identity
-    const adminEmail = this.node.tryGetContext('adminEmail');
-    
     // Create SES Email Identity
     const senderIdentity = new ses.EmailIdentity(this, 'SenderIdentity', {
       identity: ses.Identity.email(adminEmail),
@@ -45,16 +47,96 @@ export class jobsearch1 extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN, 
     });
 
-    // Resume storage bucket
     const ResumeBucket = new s3.Bucket(this, 'ResumeBucket', {
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      cors: [{
-        allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.POST, s3.HttpMethods.PUT],
-        allowedOrigins: ['*'],
-        allowedHeaders: ['*'],
-      }],
+      removalPolicy: cdk.RemovalPolicy.RETAIN, 
     });
+
+    const StudentProfileTable = new dynamodb.Table(this, 'StudentProfileTable', {
+      partitionKey: { name: 'actionID', type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,  //for production have retain
+    });
+
+    // Job Recommendations Table
+    // Primary key: email#job_type (e.g., "john@gmail.com#software-engineer")
+    const JobRecommendationsTable = new dynamodb.Table(this, 'JobRecommendationsTable', {
+      partitionKey: {
+        name: 'userJobKey',
+        type: dynamodb.AttributeType.STRING
+      },
+      sortKey: {
+        name: 'createdAt',
+        type: dynamodb.AttributeType.STRING
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // for production have retain
+    });
+        
+    // Export the table name for reference
+    new cdk.CfnOutput(this, 'StudentProfileTableOutput', {
+      value: StudentProfileTable.tableName,
+      description: 'DynamoDB table for storing student profiles',
+      exportName: 'StudentProfileTable',
+    });
+
+    const saveProfile = new lambda.Function(this, 'saveProfile', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.lambda_handler',
+      timeout: cdk.Duration.minutes(5),
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'save-profile')),
+      environment: {
+      STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
+      },
+      architecture: lambdaArchitecture,
+    });
+
+    // Add Function URL for direct frontend access
+    const saveProfileUrl = saveProfile.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      cors: {
+        allowedOrigins: ['*'],
+        allowedMethods: [lambda.HttpMethod.POST],
+        allowedHeaders: ['Content-Type']
+      }
+    });
+
+    // Lambda function with S3 bucket name from environment variable (ResumeBucket)
+    const resumeProcessorLambda = new lambda.Function(this, 'ResumeProcessorLambda', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      timeout: cdk.Duration.minutes(5),
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'resume-parser')),
+      environment: {
+        RESUME_BUCKET: ResumeBucket.bucketName,
+        SAVE_PROFILE_FUNCTION_NAME: saveProfile.functionName,
+      },
+      architecture: lambdaArchitecture,
+    });
+
+    // Add Function URL for direct frontend access to resume parser
+    const resumeProcessorUrl = resumeProcessorLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      cors: {
+        allowedOrigins: ['*'],
+        allowedMethods: [lambda.HttpMethod.POST],
+        allowedHeaders: ['Content-Type']
+      }
+    });
+
+    // Grant Lambda permissions to access the ResumeBucket
+    ResumeBucket.grantRead(resumeProcessorLambda);
+
+    // Grant Lambda permissions to invoke Bedrock models
+    resumeProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['bedrock:InvokeModel'],
+      resources: ['*'], // You can restrict to specific model ARNs if needed
+    }));
+
+    // Grant resume parser permission to invoke save profile Lambda
+    saveProfile.grantInvoke(resumeProcessorLambda);
+
+    // Grant save-profile Lambda permissions to write to DynamoDB
+    StudentProfileTable.grantWriteData(saveProfile);
 
     const kb = new bedrock.GraphKnowledgeBase(this, 'JobKnowledgeBase', {
       description: 'Knowledge base with jobs from multiple sources - contains all job listings updated daily',
@@ -79,18 +161,6 @@ export class jobsearch1 extends cdk.Stack {
         }),
     });
 
-    const StudentMemoryContractTable = new dynamodb.Table(this, 'StudentMemoryContractTable', {
-      partitionKey: { name: 'actionID', type: dynamodb.AttributeType.STRING },
-      removalPolicy: cdk.RemovalPolicy.DESTROY,  //for production have retain
-    });
-        
-    // Export the table name for reference
-    new cdk.CfnOutput(this, 'StudentMemoryContractTableName', {
-      value: StudentMemoryContractTable.tableName,
-      description: 'DynamoDB table for storing student profiles',
-      exportName: 'StudentMemoryContractTableName',
-    });
-
     // SQS Queue for job notifications
     const jobNotificationQueue = new sqs.Queue(this, 'JobNotificationQueue', {
       visibilityTimeout: cdk.Duration.minutes(5),
@@ -99,18 +169,20 @@ export class jobsearch1 extends cdk.Stack {
     // Batch Processor Lambda
     const batchProcessorLambda = new lambda.Function(this, 'BatchProcessorLambda', {
       runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'batch_processor.lambda_handler',
+      handler: 'index.lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'batch-processor')),
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
+        JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
         SQS_QUEUE_URL: jobNotificationQueue.queueUrl,
       },
     });
 
     // Grant permissions
-    StudentMemoryContractTable.grantReadData(batchProcessorLambda);
+    StudentProfileTable.grantReadData(batchProcessorLambda);
+    JobRecommendationsTable.grantReadWriteData(batchProcessorLambda);
     jobNotificationQueue.grantSendMessages(batchProcessorLambda);
 
     // EventBridge rule to trigger at 1 AM daily
@@ -124,7 +196,7 @@ export class jobsearch1 extends cdk.Stack {
     // SQS Processor Lambda to consume job notification messages
     const sqsProcessorLambda = new lambda.Function(this, 'SQSProcessorLambda', {
       runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'sqs_processor.lambda_handler',
+      handler: 'index.lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'sqs-processor')),
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
@@ -160,19 +232,21 @@ export class jobsearch1 extends cdk.Stack {
     // Notification Sender Lambda for 9 AM daily notifications
     const notificationSenderLambda = new lambda.Function(this, 'NotificationSenderLambda', {
       runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'notification_sender.lambda_handler',
+      handler: 'index.lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'notification-sender')),
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
+        DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
+        JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
         SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
         SENDER_EMAIL: adminEmail,
       },
     });
 
     // Grant permissions for notification sender
-    StudentMemoryContractTable.grantReadData(notificationSenderLambda);
+    StudentProfileTable.grantReadData(notificationSenderLambda);
+    JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
     smsNotificationTopic.grantPublish(notificationSenderLambda);
     
     notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
@@ -193,64 +267,7 @@ export class jobsearch1 extends cdk.Stack {
       description: 'Send daily notifications at 9 AM MST',
     });
 
-    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda));
-
-    // Resume Processor Lambda
-    const resumeProcessorLambda = new lambda.Function(this, 'ResumeProcessorLambda', {
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'resume_processor.lambda_handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'resume-processor')),
-      timeout: cdk.Duration.minutes(5),
-      architecture: lambdaArchitecture,
-      environment: {
-        RESUME_BUCKET: ResumeBucket.bucketName,
-      },
-    });
-
-    // Grant S3 permissions to resume processor
-    ResumeBucket.grantReadWrite(resumeProcessorLambda);
-    
-    // Add Bedrock permissions for resume processing
-    resumeProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['bedrock:InvokeModel'],
-      resources: ['*'],
-    }));
-
-    // Create Lambda Function URL for resume processor
-    const resumeProcessorUrl = resumeProcessorLambda.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
-      cors: {
-        allowedOrigins: ['*'],
-        allowedMethods: [lambda.HttpMethod.POST],
-        allowedHeaders: ['*'],
-      },
-    });
-
-    // Profile Saver Lambda
-    const profileSaverLambda = new lambda.Function(this, 'ProfileSaverLambda', {
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'profile_saver.lambda_handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'profile-saver')),
-      timeout: cdk.Duration.minutes(2),
-      architecture: lambdaArchitecture,
-      environment: {
-        DYNAMODB_TABLE_NAME: StudentMemoryContractTable.tableName,
-      },
-    });
-
-    // Grant DynamoDB permissions to profile saver
-    StudentMemoryContractTable.grantWriteData(profileSaverLambda);
-
-    // Create Lambda Function URL for profile saver
-    const profileSaverUrl = profileSaverLambda.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
-      cors: {
-        allowedOrigins: ['*'],
-        allowedMethods: [lambda.HttpMethod.POST],
-        allowedHeaders: ['*'],
-      },
-    });
+    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda)); 
     
     new cdk.CfnOutput(this, 'DockerImageURI', {
       value: jobSearchAgentImage.imageUri,
@@ -264,24 +281,30 @@ export class jobsearch1 extends cdk.Stack {
       exportName: 'JobSearchKnowledgeBaseId',
     });
 
-    new cdk.CfnOutput(this, 'ResumeProcessorUrl', {
-      value: resumeProcessorUrl.url,
-      description: 'Resume Processor Lambda Function URL',
-      exportName: 'ResumeProcessorUrl',
+    // Export the table name for reference
+    new cdk.CfnOutput(this, 'JobRecommendationsTableName', {
+      value: JobRecommendationsTable.tableName,
+      description: 'DynamoDB table for storing job recommendations per user',
+      exportName: 'JobRecommendationsTableName',
     });
 
-    new cdk.CfnOutput(this, 'SaveProfileUrl', {
-      value: profileSaverUrl.url,
-      description: 'Profile Saver Lambda Function URL',
-      exportName: 'SaveProfileUrl',
-    });
+  new cdk.CfnOutput(this, 'ResumeBucketName', {
+    value: ResumeBucket.bucketName,
+    description: 'S3 bucket for storing user resumes',
+    exportName: 'ResumeBucketName',
+  });
 
-    new cdk.CfnOutput(this, 'ResumeBucketName', {
-      value: ResumeBucket.bucketName,
-      description: 'S3 bucket for storing resumes',
-      exportName: 'ResumeBucketName',
-    });
+  new cdk.CfnOutput(this, 'SaveProfileUrl', {
+    value: saveProfileUrl.url,
+    description: 'Lambda Function URL for save profile endpoint',
+    exportName: 'SaveProfileUrl',
+  });
 
+  new cdk.CfnOutput(this, 'ResumeProcessorUrl', {
+    value: resumeProcessorUrl.url,
+    description: 'Lambda Function URL for resume parser endpoint',
+    exportName: 'ResumeProcessorUrl',
+  });
 
   }
 }
