@@ -13,8 +13,6 @@ generated_handshake_production jobs 2025-08-13T1633.json_label
 payload-with-resume-corrected.json
 Aryan Khanna Resume.pdf
 
-# Frontend - Exclude entire folder
-frontend/
 mock_jobs.json
 search_job_id.py
 
@@ -56,6 +54,8 @@ wheels/
 # OS
 .DS_Store
 .DS_Store?
+.ds_store
+.ds_store?
 ._*
 .Spotlight-V100
 .Trashes
