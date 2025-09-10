@@ -13,13 +13,8 @@ generated_handshake_production jobs 2025-08-13T1633.json_label
 payload-with-resume-corrected.json
 Aryan Khanna Resume.pdf
 
-<<<<<<< HEAD
-=======
-# Frontend - Exclude entire folder
-frontend/
 mock_jobs.json
 search_job_id.py
->>>>>>> origin/main
 
 # Python
 __pycache__/
