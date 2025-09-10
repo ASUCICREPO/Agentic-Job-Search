@@ -49,7 +49,15 @@ export class jobsearch1 extends cdk.Stack {
 
     const ResumeBucket = new s3.Bucket(this, 'ResumeBucket', {
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN, 
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      cors: [
+        {
+          allowedHeaders: ['*'],
+          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD, s3.HttpMethods.PUT, s3.HttpMethods.POST, s3.HttpMethods.DELETE],
+          allowedOrigins: ['*'],
+          exposedHeaders: []
+        }
+      ]
     });
 
     const StudentProfileTable = new dynamodb.Table(this, 'StudentProfileTable', {
