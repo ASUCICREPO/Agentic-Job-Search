@@ -75,24 +75,24 @@ Return only the JSON object:"""
 def handler(event, context):
     """
     Lambda handler for onboarding flow resume parsing.
-    
+
     Expected event format:
     {
         "s3_path": "s3://bucket-name/path/to/resume.pdf",
-        "user_id": "optional_user_identifier"
     }
-    
+
     Returns parsed resume data for frontend form population.
     """
     try:
-        # Get S3 path from event
-        s3_path = event.get('s3_path')
+        # Extract s3_path from Function URL payload
+        s3_path = json.loads(event['body'])['s3_path']
+
         if not s3_path:
             raise ValueError("Missing required parameter: s3_path")
-        
+
         # Extract and parse resume using Nova Pro
         parsed_data = extract_and_parse_resume(s3_path)
-        
+
         # Return parsed data
         return {
             'statusCode': 200,
@@ -102,7 +102,7 @@ def handler(event, context):
                 'message': 'Resume parsed successfully'
             })
         }
-        
+
     except Exception as e:
         return {
             'statusCode': 500,
