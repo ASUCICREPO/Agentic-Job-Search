@@ -3,6 +3,7 @@ import React, { useState, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import styled, { createGlobalStyle, keyframes } from "styled-components";
 import sparkyImage from '../assets/images/sparky.png';
+import { uploadResumeAndParse, saveProfile, ProfileData } from '../services/profileService';
 
 /* -------------------- Global styles (font + resets) -------------------- */
 const GlobalStyle = createGlobalStyle`
@@ -143,6 +144,12 @@ const UploadBtn = styled.label`
 
   &:hover { background: var(--asu-maroon-dark); transform: translateY(-1px); }
   &:active { transform: translateY(0); box-shadow: 0 4px 10px rgba(139,21,56,.18); }
+  
+  &:has(input:disabled) {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
 `;
 
 /* --------------------------- Profile section --------------------------- */
@@ -230,8 +237,8 @@ const TextArea = styled.textarea`
 `;
 
 const Proceed = styled.button`
+  margin: 40px 0 0 auto;
   display: block;
-  margin: 40px auto 0;
   background: var(--asu-maroon);
   color: #fff;
   border: 0;
@@ -245,6 +252,12 @@ const Proceed = styled.button`
 
   &:hover { background: var(--asu-maroon-dark); transform: translateY(-2px); }
   &:active { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(139,21,56,.22); }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
 `;
 
 /* --------------------------------- Page -------------------------------- */
@@ -252,7 +265,7 @@ const JobSearchPage: React.FC = () => {
   const navigate = useNavigate();
   const fileInputId = useId();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ProfileData>({
     fullName: "",
     location: "",
     headline: "",
@@ -260,9 +273,12 @@ const JobSearchPage: React.FC = () => {
     education: "",
     experience: "",
     email: "",
+    phone: "",
     interests: "",
     linkedin: ""
   });
+
+  const [isLoading, setIsLoading] = useState(false);
 
   const onChange =
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -270,12 +286,31 @@ const JobSearchPage: React.FC = () => {
       setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-  const handleResume = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleResume = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // TODO: hook your parsing/upload flow here.
-    // For now, just give a quick visual acknowledgement:
-    alert(`Selected resume: ${file.name}`);
+    
+    setIsLoading(true);
+    try {
+      const parsedData = await uploadResumeAndParse(file);
+      setFormData(parsedData);
+    } catch (error) {
+      alert('Failed to process resume. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setIsLoading(true);
+    try {
+      await saveProfile(formData);
+      navigate("/job-options", { state: { userName: formData.fullName || "User" } });
+    } catch (error) {
+      console.error('Save profile error:', error);
+      alert(`Failed to save profile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -299,9 +334,9 @@ const JobSearchPage: React.FC = () => {
           </UploadLeft>
 
           <div>
-            <HiddenFile id={fileInputId} accept=".pdf,.doc,.docx" onChange={handleResume}/>
+            <HiddenFile id={fileInputId} accept=".pdf,.doc,.docx" onChange={handleResume} disabled={isLoading}/>
             <UploadBtn htmlFor={fileInputId} role="button" aria-label="Upload Resume">
-              Upload Resume
+              {isLoading ? 'Processing...' : 'Upload Resume'}
             </UploadBtn>
           </div>
         </UploadStrip>
@@ -345,8 +380,13 @@ const JobSearchPage: React.FC = () => {
             </Field>
 
             <Field>
-              <Label htmlFor="email">Email, Phone Number</Label>
-              <Input id="email" name="email" placeholder="Email, Phone Number" value={formData.email} onChange={onChange}/>
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" placeholder="Email Address" value={formData.email} onChange={onChange}/>
+            </Field>
+
+            <Field>
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input id="phone" name="phone" placeholder="Phone Number" value={formData.phone} onChange={onChange}/>
             </Field>
 
             <Field>
@@ -360,8 +400,8 @@ const JobSearchPage: React.FC = () => {
             </Field>
           </Grid>
 
-          <Proceed onClick={() => navigate("/job-options", { state: { userName: formData.fullName || "User" } })}>
-            Proceed to Job Search
+          <Proceed onClick={handleSaveProfile} disabled={isLoading}>
+            {isLoading ? 'Saving...' : 'Proceed to Job Search'}
           </Proceed>
         </Card>
       </Page>
