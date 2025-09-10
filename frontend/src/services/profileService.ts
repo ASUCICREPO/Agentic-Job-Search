@@ -1,10 +1,9 @@
 // profileService.ts — Upload to S3 first (browser) → then call Lambdas
-// Uses AWS SDK v3 in the browser. Requires AWS creds available at build/runtime.
+// Uses AWS SDK v3 in the browser. Requires permanent AWS credentials available at build/runtime.
 // Env vars expected (CRA-style):
 //   REACT_APP_AWS_REGION=us-west-2
-//   REACT_APP_AWS_ACCESS_KEY_ID=...
-//   REACT_APP_AWS_SECRET_ACCESS_KEY=...
-//   REACT_APP_AWS_SESSION_TOKEN=...        (optional, only needed for temporary credentials)
+//   REACT_APP_AWS_ACCESS_KEY_ID=...           (permanent access key)
+//   REACT_APP_AWS_SECRET_ACCESS_KEY=...       (permanent secret key)
 //   REACT_APP_RESUME_BUCKET=jobsearch1-resumebucketd07ccf44-l8h8v5hmexrl
 //   REACT_APP_RESUME_PROCESSOR_URL=https://4566b7h7rszoztro6pzruefy4e0qfccu.lambda-url.us-west-2.on.aws/
 //   REACT_APP_SAVE_PROFILE_URL=https://mltl55hbav4zpk5a3ocqsazzpm0yncnt.lambda-url.us-west-2.on.aws/
@@ -19,7 +18,6 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 const REGION = process.env.REACT_APP_AWS_REGION || 'us-west-2';
 const ACCESS_KEY_ID = process.env.REACT_APP_AWS_ACCESS_KEY_ID || '';
 const SECRET_ACCESS_KEY = process.env.REACT_APP_AWS_SECRET_ACCESS_KEY || '';
-const SESSION_TOKEN = process.env.REACT_APP_AWS_SESSION_TOKEN || '';
 
 const RESUME_BUCKET =
   process.env.REACT_APP_RESUME_BUCKET ||
@@ -57,25 +55,18 @@ function requireBrowserCreds() {
 
 function s3(): S3Client {
   requireBrowserCreds();
-  const credentials: any = {
-    accessKeyId: ACCESS_KEY_ID,
-    secretAccessKey: SECRET_ACCESS_KEY,
-  };
-  
-  // Only add sessionToken if it exists (for temporary credentials)
-  if (SESSION_TOKEN) {
-    credentials.sessionToken = SESSION_TOKEN;
-  }
-  
   return new S3Client({
     region: REGION,
-    credentials,
+    credentials: {
+      accessKeyId: ACCESS_KEY_ID,
+      secretAccessKey: SECRET_ACCESS_KEY,
+    },
   });
 }
 
 function safeName(name: string): string {
   // keep original name characters that are S3-safe; avoid spaces
-  return name.replace(/\s+/g, '-').replace(/[^A-Za-z0-9._\-]/g, '');
+  return name.replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '');
 }
 
 async function postJson(url: string, body: any) {
@@ -146,14 +137,15 @@ async function uploadResumeToS3(file: File): Promise<string> {
   console.log(`🔗 Full S3 path: ${s3Path}`);
   
   try {
-    // Convert File to ArrayBuffer to avoid streaming issues
+    // Convert File to ArrayBuffer and then to Uint8Array for AWS SDK compatibility
     const arrayBuffer = await file.arrayBuffer();
-    
+    const uint8Array = new Uint8Array(arrayBuffer);
+
     await client.send(
       new PutObjectCommand({
         Bucket: RESUME_BUCKET,
         Key: key,
-        Body: arrayBuffer,
+        Body: uint8Array,
         ContentType: file.type || 'application/octet-stream',
       })
     );
@@ -221,26 +213,17 @@ export const uploadResumeAndParse = async (file: File): Promise<ProfileData> => 
 export const saveProfile = async (profileData: ProfileData): Promise<void> => {
   console.log('💾 Starting profile save process...');
   console.log(`🔗 Save Profile Lambda URL: ${SAVE_PROFILE_URL}`);
-  
+
   try {
-    const payload = toSchema(profileData);
+    const schemaData = toSchema(profileData);
+    const payload = {
+      parsed_data: schemaData
+    };
     console.log('📤 Sending profile data to Save Profile Lambda:', JSON.stringify(payload, null, 2));
-    
-    const resp = await fetch(SAVE_PROFILE_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    
-    console.log(`📡 Save Profile Lambda response status: ${resp.status}`);
-    
-    if (!resp.ok) {
-      const errorText = await resp.text();
-      console.error('❌ Save Profile Lambda failed:', errorText);
-      throw new Error(`Failed to save profile: ${resp.status} - ${errorText}`);
-    }
-    
+
+    const data = await postJson(SAVE_PROFILE_URL, payload);
+    console.log('📥 Received response from Save Profile Lambda:', JSON.stringify(data, null, 2));
+
     console.log('✅ Profile saved successfully!');
   } catch (error) {
     console.error('💥 Profile save process failed:', error);
