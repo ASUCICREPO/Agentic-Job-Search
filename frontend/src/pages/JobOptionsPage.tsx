@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import asuLogo from '../assets/images/asu-logo.png';
 
@@ -73,17 +73,19 @@ const OptionButton = styled.button`
 
 const JobOptionsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const userName = location.state?.userName || "User";
 
   const handleResumeAnalysis = () => {
-    navigate('/chatbot');
+    navigate('/chatbot', { state: { userName } });
   };
 
   const handleJobMatching = () => {
-    navigate('/chatbot');
+    navigate('/chatbot', { state: { userName } });
   };
 
   const handleCareerGuidance = () => {
-    navigate('/chatbot');
+    navigate('/chatbot', { state: { userName } });
   };
 
   return (
@@ -98,7 +100,7 @@ const JobOptionsPage: React.FC = () => {
           I am looking for a part-time job
         </OptionButton>
         <OptionButton onClick={handleJobMatching}>
-          I am looking for a full-time job/ internships
+          I am looking for a full-time job or internships
         </OptionButton>
         <OptionButton onClick={handleCareerGuidance}>
           I am exploring career paths

@@ -3,6 +3,7 @@ import React, { useState, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import styled, { createGlobalStyle, keyframes } from "styled-components";
 import sparkyImage from '../assets/images/sparky.png';
+import myProfileImage from '../assets/images/my_profile.png';
 import { uploadResumeAndParse, saveProfile, ProfileData } from '../services/profileService';
 
 /* -------------------- Global styles (font + resets) -------------------- */
@@ -40,7 +41,7 @@ const GlobalStyle = createGlobalStyle`
 const Page = styled.div`
   min-height: 100vh;
   padding: 40px 20px 72px;
-  background: var(--asu-gold);
+  background: linear-gradient(135deg, #FFC627 0%, #FFB000 100%);
 `;
 
 const Header = styled.header`
@@ -63,37 +64,18 @@ const DateText = styled.p`
 `;
 
 /* ---------------------- Upload Resume announcement --------------------- */
-const shimmer = keyframes`
-  0%   { background-position: 0% 50%; }
-  100% { background-position: 100% 50%; }
-`;
-
 const UploadStrip = styled.section`
-  max-width: 1100px;
-  margin: 18px auto 28px;
-  padding: 18px 20px;
-  border-radius: 16px;
-  border: 2px solid #EAD893;
-
-  /* soft gold gradient like the mock; animates subtly on hover/focus */
-  background: linear-gradient(90deg, #FFF4C8, #FFE38F 50%, #FFE9A6);
-  background-size: 200% 200%;
-  transition: box-shadow .25s ease, transform .15s ease;
-
+  padding: 24px 64px;
+  background: linear-gradient(90deg, #FFF8E1 0%, #FFE082 50%, #FFC627 100%);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-
-  &:hover, &:focus-within {
-    animation: ${shimmer} 3.5s linear infinite;
-    box-shadow: 0 8px 20px rgba(139, 21, 56, 0.08);
-  }
 
   @media (max-width: 720px){
     flex-direction: column;
     align-items: flex-start;
     gap: 14px;
+    padding: 18px 32px;
   }
 `;
 
@@ -130,20 +112,18 @@ const HiddenFile = styled.input.attrs({ type: "file" })`
 
 const UploadBtn = styled.label`
   cursor: pointer;
-  background: var(--asu-maroon);
+  background: #8C1D40;
   color: #fff;
   border: 0;
   border-radius: 999px;
-  padding: 12px 22px;
+  padding: 12px 24px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  box-shadow: 0 6px 14px rgba(139, 21, 56, 0.22);
-  transition: transform .15s ease, background .2s ease, box-shadow .2s ease;
+  transition: background .2s ease;
 
-  &:hover { background: var(--asu-maroon-dark); transform: translateY(-1px); }
-  &:active { transform: translateY(0); box-shadow: 0 4px 10px rgba(139,21,56,.18); }
+  &:hover { background: #6d1730; }
   
   &:has(input:disabled) {
     opacity: 0.6;
@@ -156,10 +136,18 @@ const UploadBtn = styled.label`
 const Card = styled.section`
   max-width: 1100px;
   margin: 0 auto;
-  background: var(--surface);
-  border-radius: 18px;
-  padding: 36px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+`;
+
+const ProfileSection = styled.div`
+  padding: 32px 64px 40px 64px;
+  
+  @media (max-width: 720px){
+    padding: 24px 32px 32px 32px;
+  }
 `;
 
 const ProfileHeader = styled.div`
@@ -170,7 +158,10 @@ const ProfileHeader = styled.div`
 const Avatar = styled.div`
   width: 82px; height: 82px; margin: 0 auto 16px;
   border-radius: 999px; background: var(--asu-maroon);
-  color: #fff; display: grid; place-items: center; font-size: 32px;
+  display: grid; place-items: center;
+  background-image: url(${myProfileImage});
+  background-size: cover;
+  background-position: center;
 `;
 
 const Heading = styled.h2`
@@ -325,30 +316,31 @@ const JobSearchPage: React.FC = () => {
         </Header>
 
         {/* Upload announcement strip */}
-        <UploadStrip>
-          <UploadLeft>
-            <Mascot src={sparkyImage} alt="Sparky mascot" />
-            <UploadMessage>
-              I can help you get your profile set up by just uploading your Resume!
-            </UploadMessage>
-          </UploadLeft>
-
-          <div>
-            <HiddenFile id={fileInputId} accept=".pdf,.doc,.docx" onChange={handleResume} disabled={isLoading}/>
-            <UploadBtn htmlFor={fileInputId} role="button" aria-label="Upload Resume">
-              {isLoading ? 'Processing...' : 'Upload Resume'}
-            </UploadBtn>
-          </div>
-        </UploadStrip>
-
-        {/* Profile card */}
+        {/* Combined Profile card with upload section */}
         <Card>
-          <ProfileHeader>
-            <Avatar aria-hidden>👤</Avatar>
-            <Heading>My Profile</Heading>
-          </ProfileHeader>
+          <UploadStrip>
+            <UploadLeft>
+              <Mascot src={sparkyImage} alt="Sparky mascot" />
+              <UploadMessage>
+                I can help you get your profile set up by just uploading your Resume!
+              </UploadMessage>
+            </UploadLeft>
 
-          <Grid>
+            <div>
+              <HiddenFile id={fileInputId} accept=".pdf,.doc,.docx" onChange={handleResume} disabled={isLoading}/>
+              <UploadBtn htmlFor={fileInputId} role="button" aria-label="Upload Resume">
+                {isLoading ? 'Processing...' : 'Upload Resume'}
+              </UploadBtn>
+            </div>
+          </UploadStrip>
+
+          <ProfileSection>
+            <ProfileHeader>
+              <Avatar aria-hidden></Avatar>
+              <Heading>My Profile</Heading>
+            </ProfileHeader>
+
+            <Grid>
             <Field>
               <Label htmlFor="fullName">Full Name</Label>
               <Input id="fullName" name="fullName" placeholder="Your First Name" value={formData.fullName} onChange={onChange}/>
@@ -403,6 +395,7 @@ const JobSearchPage: React.FC = () => {
           <Proceed onClick={handleSaveProfile} disabled={isLoading}>
             {isLoading ? 'Saving...' : 'Proceed to Job Search'}
           </Proceed>
+          </ProfileSection>
         </Card>
       </Page>
     </>
