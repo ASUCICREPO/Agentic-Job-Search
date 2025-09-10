@@ -19,7 +19,7 @@ from strands_tools import retrieve
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
-from tools import get_student_profile, save_student_profile, sanitize_email_for_actor_id
+from tools import get_student_profile, save_student_profile, sanitize_email_for_actor_id, save_job_recommendations, get_job_recommendations
 
 # Environment Variables
 AWS_REGION = os.getenv('AWS_REGION')
@@ -95,15 +95,14 @@ def _create_memory_event(role: str, content: str, session_id: str = "", email: s
 
 
 @tool
-def job_search_agent_tool(query: str, resume_text: str = "", session_id: str = "", email: str = "") -> str:
+def job_search_agent_tool(query: str, session_id: str = "", email: str = "") -> str:
     """
     Specialized job search agent that finds relevant job opportunities.
 
     Args:
         query: Job search query with user preferences and requirements
-        email: User email for memory tracking
-        resume_text: Optional resume content for personalized matching
         session_id: Optional session identifier for conversation continuity
+        email: User email for memory tracking
 
     Returns:
         Job search results with personalized recommendations
@@ -113,45 +112,60 @@ def job_search_agent_tool(query: str, resume_text: str = "", session_id: str = "
         memory_tools = _get_memory_tools(session_id, email)
 
         # Combine all available tools
-        tools = [retrieve, save_student_profile, get_student_profile] + memory_tools
+        tools = [
+            retrieve,
+            get_student_profile,
+            save_job_recommendations,
+            get_job_recommendations
+        ] + memory_tools
 
         # Create a specialized job search agent
         job_search_agent = Agent(
             tools=tools,
+            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
             system_prompt=(
                 "You are a specialized Job Search Agent focusing on finding relevant job opportunities with memory access.\n\n"
                 "Available Tools:\n"
                 f"• retrieve: Search job postings using knowledgeBaseId: '{JOB_SEARCH_KB}'\n"
                 "• get_student_profile: Check user profile and notification preferences\n"
-                "• save_student_profile: Store email and notification preferences\n"
+                "• save_job_recommendations: Save job recommendations to database for tracking\n"
+                "• get_job_recommendations: Retrieve previous job recommendations for a user\n"
                 "• Memory tools: Access conversation history, previous job searches, and stored preferences\n\n"
-                "MEMORY-AWARE JOB SEARCH WORKFLOW:\n"
+                "JOB SEARCH WORKFLOW:\n"
                 "1) Check memory for user's previous job search preferences and history\n"
-                "2) Analyze user's skills, experience level, and preferences from resume/query\n"
-                "3) Extract keywords and skill levels, considering user's stored preferences\n"
-                "4) Reference previous job searches and company interests from memory\n"
-                "5) Search job postings database for relevant opportunities based on history\n"
-                "6) Filter and rank job matches considering user's career trajectory\n"
+                "2) Analyze user's skills, experience level, and preferences from query and stored data\n"
+                "3) Search job postings database for relevant opportunities based on history\n"
+                "4) Filter and rank job matches considering user's career trajectory\n"
+                "5) DISPLAY ALL FOUND JOBS: Show complete job listings with EXACT job IDs that will be saved\n"
+                "6) SAVE MULTIPLE JOBS: Use save_job_recommendations() with SAME job IDs shown to user\n"
                 "7) Set up daily notifications if user agrees, remembering past preferences\n\n"
-                "User Types (Memory-Enhanced):\n"
-                "• Entry-level & Internships: Recent graduates, students (check stored career goals)\n"
-                "• Career Transition: Professionals switching industries (reference past transitions)\n"
-                "• Part-time/School: Students balancing work and studies (recall previous part-time roles)\n\n"
+                "CRITICAL DISPLAY REQUIREMENT:\n"
+                "• ALWAYS show the actual job listings to the user - NEVER just summarize\n"
+                "• If you find jobs, DISPLAY THEM IMMEDIATELY in the specified format\n"
+                "• DO NOT ask questions or give summaries without showing the jobs first\n"
+                "• Show jobs BEFORE asking follow-up questions\n"
+                "• ENSURE job IDs in display match EXACTLY what gets saved to save_job_recommendations()\n\n"
+                "JOB DISPLAY & SAVING CONSISTENCY:\n"
+                "• CRITICAL: Job IDs shown in response MUST match EXACTLY what's saved to backend\n"
+                "• The job IDs you display to users should be IDENTICAL to what you save via save_job_recommendations()\n"
+                "• Extract job IDs and titles from ALL displayed jobs\n"
+                "• Determine job category based on query: 'software-engineer', 'data-scientist', 'product-manager', etc.\n"
+                "• Use user's email from context to save recommendations under correct user\n"
+                "• Always use sent_via='livesearch' for live user interactions\n"
+                "• Example: If you share job IDs [10000089, 10000176, 10000245], save EXACTLY those same IDs\n\n"
                 "MEMORY INTEGRATION:\n"
                 "• Always reference user's previous job search criteria and preferences\n"
                 "• Consider stored salary expectations and location preferences\n"
                 "• Remember company types and industries user has shown interest in\n"
-                "• Build on previous resume feedback and skill assessments\n\n"
-                "Style: Concise, bullet-point results, recent jobs only. Personalize based on user's history."
+                "• Build on previous skill assessments and career goals\n"
+                "• Track and reference previous job recommendations to avoid duplicates\n"
+                "• Use saved recommendations for notification and follow-up systems\n\n"
+                "Style: Comprehensive job listings with full details, recent jobs only. Personalize based on user's history."
             )
         )
 
-        # Enhance query with resume context if available
-        enhanced_query = query
-        if resume_text:
-            enhanced_query = f"{query}\n\nResume Context: {resume_text}"
-
         # Add session context if available
+        enhanced_query = query
         if session_id or email:
             context_info = []
             if session_id:
@@ -190,6 +204,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
         # Create a specialized career advice agent
         career_advice_agent = Agent(
             tools=tools,
+            model="us.anthropic.claude-3-5-haiku-20241022-v1:0",
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
                 f"Available Tools:\n"
@@ -253,46 +268,38 @@ class MultiAgentJobSearchSystem:
 
         self.orchestrator_agent = Agent(
             tools=tools,
+            model="global.anthropic.claude-sonnet-4-20250514-v1:0",
             system_prompt=(
                 "You are an intelligent Orchestrator Agent for a Career Services platform with full memory access.\n\n"
                 "Available Specialized Agents:\n"
-                "• job_search_agent_tool: Handles job search queries, finding opportunities, resume matching\n"
-                "• career_advice_agent_tool: Provides career guidance, resume help, interview prep, career transitions\n"
+                "• job_search_agent_tool: Handles job search queries, finding opportunities based on skills and preferences\n"
+                "• career_advice_agent_tool: Provides career guidance, interview prep, career transitions\n"
                 "• Memory tools: Access conversation history, preferences, and stored user information\n\n"
                 "MEMORY ACCESS PROTOCOL:\n"
-                "FIRST INTERACTION CHECK:\n"
-                "• Always check memory for existing user preferences and conversation history\n"
-                "• Use memory tools to recall previous job searches, career goals, and preferences\n"
-                "• If preferences found, share them with user and ask for confirmation/updates\n"
-                "• Reference stored resume information and previous interactions\n"
-                "• Personalize responses based on user's history and stored preferences\n\n"
-                "MEMORY-DRIVEN WORKFLOW:\n"
-                "1) Load user memory and conversation history\n"
-                "2) Analyze current query in context of user's history and confirmed preferences\n"
-                "3) Reference previous preferences and stored information\n"
-                "4) Personalize response based on user's profile and history\n"
-                "5) Store new information and preferences for future interactions\n\n"
-                "PREFERENCE SHARING PROTOCOL:\n"
-                "• When loading memory for first interaction or after long absence\n"
-                "• Share found preferences with user: 'I found these preferences from our previous interactions...'\n"
-                "• Ask for confirmation: 'Would you like to update any of these preferences?'\n"
-                "• Update stored preferences based on user feedback\n"
-                "• Use confirmed preferences to personalize all responses\n\n"
-                "Routing Guidelines:\n"
-                "• Job Search Queries → Use job_search_agent_tool:\n"
-                "  - Finding jobs or internships (consider user's previous job preferences)\n"
-                "  - Job recommendations based on skills/resume and stored preferences\n"
-                "  - Job market trends and opportunities (based on user's career field)\n\n"
-                "• Career Advice Queries → Use career_advice_agent_tool:\n"
-                "  - Resume writing and optimization (build on previous resume feedback)\n"
-                "  - Interview preparation and techniques (reference past interview experiences)\n"
-                "  - Career transition strategies (consider user's current career trajectory)\n"
-                "  - Skill development and learning paths (based on user's skill assessment history)\n"
-                "  - Networking and professional development (reference past networking activities)\n"
-                "  - Salary negotiation advice (use stored salary expectations and history)\n"
-                "  - Work-life balance guidance (consider user's previous balance discussions)\n\n"
-                "General Questions: Answer directly while referencing stored user information\n"
-                "Complex Queries: Route to appropriate specialized agents with full context from memory\n\n"
+                "SMART MEMORY CHECK:\n"
+                "• Check memory briefly on first interaction to understand user preferences\n"
+                "• If preferences found, share them once and proceed with job search\n"
+                "• DO NOT repeatedly check memory and ask for confirmation in a loop\n"
+                "• Once user confirms preferences, proceed immediately to job search\n\n"
+                "JOB SEARCH TRIGGERING:\n"
+                "• When user explicitly asks for jobs: ROUTE IMMEDIATELY to job_search_agent_tool\n"
+                "• Do NOT get stuck in memory-checking loops when user has already confirmed\n"
+                "• If user says 'yes' to job search: proceed without further confirmation\n"
+                "• Break the confirmation loop and actually perform the job search\n\n"
+                "CORE BEHAVIOR:\n"
+                "1) Check memory once, then proceed with job search when user confirms\n"
+                "2) For career advice questions: Route immediately to career_advice_agent_tool\n"
+                "3) For job search requests: Route to job_search_agent_tool after ONE confirmation\n"
+                "4) DO NOT create endless confirmation loops - proceed after user says 'yes'\n"
+                "5) NEVER answer questions directly - ALWAYS route to specialized agents when appropriate\n"
+                "6) When user asks for jobs and confirms preferences: SEARCH IMMEDIATELY\n\n"
+                "JOB DISPLAY PROTOCOL:\n"
+                "• When job_search_agent_tool returns job results: DISPLAY THEM TO USER IMMEDIATELY\n"
+                "• Show all jobs found in the same comprehensive format as specified in job search agent\n"
+                "• Include job titles, companies, locations, salaries, descriptions, and job IDs\n"
+                "• Format as numbered list with emojis and clear sections\n"
+                "• DO NOT summarize or ask questions first - show the jobs immediately\n"
+                "• After displaying jobs, then ask follow-up questions if needed\n\n"
             )
         )
 
@@ -304,8 +311,7 @@ async def handle_agent_request(payload):
     Expected payload format:
     {
         "prompt": "Find me software engineering jobs in the Bay Area",
-        "resume_text": "John Doe\nSoftware Engineer...",  # optional
-        "session_id": "user123_session456"  # optional - enables conversation continuity
+        "session_id": "user123_session456",  # optional - enables conversation continuity
         "email": "user@example.com"  # optional - for memory tracking
     }
 
@@ -325,7 +331,6 @@ async def handle_agent_request(payload):
 
     # Extract components from payload
     prompt = payload.get("prompt")
-    resume_text = payload.get("resume_text")
     session_id = payload.get("session_id")
     email = payload.get("email")
 
@@ -353,12 +358,11 @@ async def handle_agent_request(payload):
         if context_parts:
             enhanced_prompt = f"[Context: {' | '.join(context_parts)}]\n{prompt}"
 
-        # Add resume to prompt if provided (orchestrator can decide how to use it)
-        if resume_text:
-            enhanced_prompt += f"\n\nResume Context: {resume_text}"
+        # Enhanced prompt is ready with session and email context
 
         # Stream the response from the orchestrator agent
         final_response = ""
+        job_search_thinking_sent = False  # Flag to prevent duplicate thinking messages
         async for event in orchestrator_system.orchestrator_agent.stream_async(enhanced_prompt):
             # Real-time text generation (thinking process)
             if "data" in event:
@@ -377,6 +381,12 @@ async def handle_agent_request(payload):
             elif "current_tool_use" in event:
                 tool_info = event["current_tool_use"]
                 if "name" in tool_info:
+                    # Special thinking message for job search agent (send only once)
+                    if tool_info["name"] == "job_search_agent_tool" and not job_search_thinking_sent:
+                        yield {"thinking": "🔍 Searching for relevant job opportunities based on your preferences..."}
+                        yield {"job_search_started": True}
+                        job_search_thinking_sent = True  # Set flag to prevent duplicate messages
+
                     tool_data = {"tool_name": tool_info["name"]}
                     if "input" in tool_info:
                         tool_data["tool_input"] = tool_info["input"]
