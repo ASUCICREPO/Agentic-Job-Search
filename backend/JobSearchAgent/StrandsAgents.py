@@ -110,9 +110,10 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
     """
     try:
         # Get memory tools
-        # Conditionally include save_job_recommendations based on source
-        base_tools = [retrieve, get_student_profile, save_student_profile]
+        # Conditionally include tools based on source
+        base_tools = [retrieve, get_student_profile]
         if source == "batch":
+            base_tools.append(save_student_profile)
             base_tools.append(get_job_recommendations)
             base_tools.append(save_job_recommendations)
 
