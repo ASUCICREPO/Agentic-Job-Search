@@ -399,6 +399,9 @@ async def handle_agent_request(payload):
         # Stream the response from the orchestrator agent
         final_response = ""
         job_search_thinking_sent = False  # Flag to prevent duplicate thinking messages
+        carrier_advice_thinking_sent = False  # Flag to prevent duplicate thinking messages
+        job_search_started = False  # Track if job search was initiated
+        carrier_advice_started = False  # Track if career advice was initiated
 
         async for event in orchestrator_system.orchestrator_agent.stream_async(enhanced_prompt):
 
@@ -417,11 +420,17 @@ async def handle_agent_request(payload):
                                 final_response = content["text"]
                             elif "toolResult" in content:
                                 tool_result = content["toolResult"]
-                                # For job search results, yield them directly
-                                if "content" in tool_result:
+                                # Only send job_agent_result if job search was initiated
+                                if job_search_started and "content" in tool_result:
                                     for result_content in tool_result["content"]:
                                         if "text" in result_content:
                                             yield {"job_agent_result": result_content["text"]}
+                                            final_response = result_content["text"]
+                                # Only send carrier_advice_result if career advice was initiated
+                                elif carrier_advice_started and "content" in tool_result:
+                                    for result_content in tool_result["content"]:
+                                        if "text" in result_content:
+                                            yield {"carrier_advice_result": result_content["text"]}
                                             final_response = result_content["text"]
 
                 # Tool usage information - show the streaming tool input being built
@@ -432,7 +441,14 @@ async def handle_agent_request(payload):
                         if tool_info["name"] == "job_search_agent_tool" and not job_search_thinking_sent:
                             yield {"thinking": "🔍 Searching for relevant job opportunities based on your preferences..."}
                             yield {"job_search_started": True}
+                            job_search_started = True  # Track that job search was initiated
                             job_search_thinking_sent = True  # Set flag to prevent duplicate messages
+                        # Special thinking message for career advice agent (send only once)
+                        elif tool_info["name"] == "career_advice_agent_tool" and not carrier_advice_thinking_sent:
+                            yield {"thinking": "💼 Providing career guidance and advice..."}
+                            yield {"carrier_advice_started": True}
+                            carrier_advice_started = True  # Track that career advice was initiated
+                            carrier_advice_thinking_sent = True  # Set flag to prevent duplicate messages
 
                 # Error events
                 elif "error" in event:
