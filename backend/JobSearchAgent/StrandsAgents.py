@@ -111,7 +111,7 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
     try:
         # Get memory tools
         # Conditionally include save_job_recommendations based on source
-        base_tools = [retrieve, get_student_profile]
+        base_tools = [retrieve, get_student_profile, save_student_profile]
         if source == "batch":
             base_tools.append(get_job_recommendations)
             base_tools.append(save_job_recommendations)
@@ -128,18 +128,26 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "Available Tools:\n"
                 f"• retrieve: Search job postings using knowledgeBaseId: '{JOB_SEARCH_KB}'\n"
                 "• get_student_profile: Check user profile and notification preferences\n"
+                "• save_student_profile: Save user email and notification preferences\n"
                 "• Memory tools: Access conversation history, previous job searches, and stored preferences (read-only)\n\n"
                 "SOURCE-BASED WORKFLOW:\n"
                 "• If source='livesearch': DO NOT save job recommendations - only return search results\n"
                 "• If source='batch': Save job recommendations using save_job_recommendations() after analysis\n\n"
                 "ENHANCED WORKFLOW WITH USER PROFILE:\n"
-                "1) Use the enhanced query provided by orchestrator (includes user's skills, experience, preferences)\n"
-                "2) Search for relevant job opportunities using retrieve tool with personalized criteria (MAX 5 retrieve calls)\n"
-                "3) Extract detailed job information from search results\n"
-                "4) Analyze user profile information and match with job requirements to create User_fit explanation\n"
-                "5) Personalize job recommendations based on user's skills, experience level, and career goals\n"
-                "6) If source='batch': Save job recommendations using save_job_recommendations()\n"
-                "7) RETURN ONLY a valid JSON array in this exact format:\n\n"
+                "1) Check if user profile exists using get_student_profile()\n"
+                "2) DETECT QUERY TYPE:\n"
+                "   - If query is opt-in response ('Yes', 'No', 'I want notifications', etc.): Save preference using save_student_profile() and return confirmation message\n"
+                "   - If query is job search request: Continue with job search workflow\n"
+                "3) FOR JOB SEARCH: Use the enhanced query provided by orchestrator (includes user's skills, experience, preferences)\n"
+                "4) FOR JOB SEARCH: Search for relevant job opportunities using retrieve tool with personalized criteria (MAX 5 retrieve calls)\n"
+                "5) FOR JOB SEARCH: Extract detailed job information from search results\n"
+                "6) FOR JOB SEARCH: Analyze user profile information and match with job requirements to create User_fit explanation\n"
+                "7) FOR JOB SEARCH: Personalize job recommendations based on user's skills, experience level, and career goals\n"
+                "8) FOR JOB SEARCH: If source='batch': Save job recommendations using save_job_recommendations()\n"
+                "9) FOR JOB SEARCH: RETURN job results as JSON array\n"
+                "10) FOR JOB SEARCH: AFTER returning job results, handle notification preferences:\n"
+                "    - If NO profile exists OR optInStatus=False: Ask 'Would you like daily notifications with job recommendations?' and save using save_student_profile()\n"
+                "    - If profile EXISTS and optInStatus=True: Skip notification question (user already opted in)\n\n"
                 "PERFORMANCE CONSTRAINTS:\n"
                 "• LIMIT retrieve tool calls to MAXIMUM 5 times per job search\n"
                 "• Prioritize quality over quantity of search results\n"
@@ -164,18 +172,17 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "  }\n"
                 "]\n\n"
                 "CRITICAL RESPONSE CONSTRAINTS:\n"
-                "• RETURN ONLY the JSON array - ABSOLUTELY NO additional text, explanations, or introductions\n"
-                "• DO NOT include phrases like 'Based on the search results...', 'I'll now provide you with...', or any other text\n"
-                "• DO NOT add any introductory sentences or conclusions\n"
-                "• If no jobs found, return: []\n"
-                "• NO thinking, explanation, or markdown text before or after the JSON\n"
-                "• NO formatting outside the JSON structure\n"
+                "• FOR OPT-IN RESPONSES (step 2): Return plain text confirmation message only\n"
+                "• FOR JOB SEARCH (steps 3-9): Return job results as JSON array first\n"
+                "• FOR JOB SEARCH (step 10): If notification question needed, add it as plain text after the JSON\n"
+                "• For job results: RETURN ONLY the JSON array first\n"
+                "• For job results: ABSOLUTELY NO additional text, explanations, or introductions before JSON\n"
+                "• For job results: If no jobs found, return: []\n"
+                "• For job results: START with [ and END with ]\n"
                 "• User_fit must explain why the user matches this job based on their profile\n"
                 "• Include all available salary information (use 'Not specified' if missing)\n"
                 "• Always use the exact field names shown above\n"
-                "• If error occurs, return: []\n"
-                "• START your response directly with [ and END directly with ]\n"
-                "• NO text before the opening [ bracket and NO text after the closing ] bracket"
+                "• If error occurs, return: []"
             )
         )
 
