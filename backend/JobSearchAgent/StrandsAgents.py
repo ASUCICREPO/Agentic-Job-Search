@@ -134,7 +134,7 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "• Memory tools: Access conversation history, previous job searches, and stored preferences (read-only)\n\n"
                 "SOURCE-BASED WORKFLOW:\n"
                 "• If source='livesearch': DO NOT save job recommendations - only return search results\n"
-                "• If source='batch': Save job recommendations using save_job_recommendations() after analysis\n\n"
+                "• If source='batch': DIRECTLY save job recommendations to DynamoDB using save_job_recommendations() and return ONLY success/failure message - DO NOTHING ELSE\n\n"
                 "ENHANCED WORKFLOW WITH USER PROFILE:\n"
                 "1) Check if user profile exists using get_student_profile()\n"
                 "2) DETECT QUERY TYPE:\n"
@@ -145,9 +145,9 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "5) FOR JOB SEARCH: Extract detailed job information from search results\n"
                 "6) FOR JOB SEARCH: Analyze user profile information and match with job requirements to create User_fit explanation\n"
                 "7) FOR JOB SEARCH: Personalize job recommendations based on user's skills, experience level, and career goals\n"
-                "8) FOR JOB SEARCH: If source='batch': Save job recommendations using save_job_recommendations()\n"
-                "9) FOR JOB SEARCH: RETURN job results as JSON array\n"
-                "10) FOR JOB SEARCH: AFTER returning job results, handle notification preferences:\n"
+                "8) FOR JOB SEARCH: If source='batch': Save job recommendations using save_job_recommendations() and return ONLY success message\n"
+                "9) FOR JOB SEARCH: If source='livesearch': RETURN job results as JSON array\n"
+                "10) FOR JOB SEARCH (LIVESEARCH ONLY): AFTER returning job results, handle notification preferences:\n"
                 "    - If NO profile exists OR optInStatus=False: Ask 'Would you like daily notifications with job recommendations?' and save using save_student_profile()\n"
                 "    - If profile EXISTS and optInStatus=True: Skip notification question (user already opted in)\n\n"
                 "PERFORMANCE CONSTRAINTS:\n"
@@ -175,12 +175,14 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "]\n\n"
                 "CRITICAL RESPONSE CONSTRAINTS:\n"
                 "• FOR OPT-IN RESPONSES (step 2): Return plain text confirmation message only\n"
-                "• FOR JOB SEARCH (steps 3-9): Return job results as JSON array first\n"
-                "• FOR JOB SEARCH (step 10): If notification question needed, add it as plain text after the JSON\n"
-                "• For job results: RETURN ONLY the JSON array first\n"
-                "• For job results: ABSOLUTELY NO additional text, explanations, or introductions before JSON\n"
-                "• For job results: If no jobs found, return: []\n"
-                "• For job results: START with [ and END with ]\n"
+                "• FOR JOB SEARCH source='batch': Save results using save_job_recommendations() and return ONLY success/failure message\n"
+                "• FOR JOB SEARCH source='livesearch' (steps 3-9): Return job results as JSON array first\n"
+                "• FOR JOB SEARCH source='livesearch' (step 10): If notification question needed, add it as plain text after the JSON\n"
+                "• For livesearch job results: RETURN ONLY the JSON array first\n"
+                "• For livesearch job results: ABSOLUTELY NO additional text, explanations, or introductions before JSON\n"
+                "• For livesearch job results: If no jobs found, return: []\n"
+                "• For livesearch job results: START with [ and END with ]\n"
+                "• For batch processing: Use save_job_recommendations() to save results and return minimal success message\n"
                 "• User_fit must explain why the user matches this job based on their profile\n"
                 "• Include all available salary information (use 'Not specified' if missing)\n"
                 "• Always use the exact field names shown above\n"
@@ -395,6 +397,25 @@ async def handle_agent_request(payload):
         context_parts.append(f"Source: {source}")
 
         enhanced_prompt = f"[Context: {' | '.join(context_parts)}]\n{prompt}"
+
+        # Check if source is "batch" - if so, directly call job_search_agent_tool
+        if source == "batch":
+            print(f"Batch processing detected - directly calling job search agent for user: {email}")
+            # Directly call job_search_agent_tool for batch processing
+            batch_result = job_search_agent_tool(
+                query=enhanced_prompt,
+                session_id=session_id,
+                email=email,
+                source=source
+            )
+
+            # Create memory event for the batch result
+            _create_memory_event("ASSISTANT", str(batch_result), session_id, email)
+
+            # Return the result directly
+            yield {"job_agent_result": str(batch_result)}
+            yield {"final_result": str(batch_result)}
+            return
 
         # Enhanced prompt is ready with session and email context
 
