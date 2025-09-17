@@ -35,34 +35,7 @@ export async function invokeAgent(
     
     console.log('Raw agent response:', textResponse);
     
-    // Extract only the final response, not the thinking process
-    if (textResponse) {
-      // Look for the final response field
-      const responseMatch = textResponse.match(/"response":\s*"([^"]+)"/);
-      if (responseMatch) {
-        // Clean up the response by converting escape characters
-        return responseMatch[1]
-          .replace(/\\n/g, '\n')
-          .replace(/\\"/g, '"')
-          .replace(/\\\\/g, '\\');
-      }
-      
-      // If no response field, try to get the last meaningful content
-      const lines = textResponse.split('\n').filter(line => line.trim());
-      const lastLine = lines[lines.length - 1];
-      if (lastLine && !lastLine.includes('"thinking"') && !lastLine.includes('"error"')) {
-        try {
-          const parsed = JSON.parse(lastLine.replace('data: ', ''));
-          if (parsed.response) {
-            return parsed.response
-              .replace(/\\n/g, '\n')
-              .replace(/\\"/g, '"')
-              .replace(/\\\\/g, '\\');
-          }
-        } catch {}
-      }
-    }
-    
+    // Return the full response so ChatBotPage can detect job_search_started
     return textResponse?.trim() || 'No response from agent';
   } catch (error) {
     console.error('Agent invocation failed:', error);
