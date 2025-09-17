@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore';
+import triASU from '../assets/images/triASU.png';
 
 const Container = styled.div`
   min-height: 100vh;
@@ -9,7 +10,7 @@ const Container = styled.div`
 `;
 
 const Header = styled.div`
-  background: #b71c1c;
+  background: #8B1538;
   color: white;
   padding: 20px;
   position: relative;
@@ -27,6 +28,13 @@ const CloseButton = styled.button`
   border-radius: 50%;
   cursor: pointer;
   font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
 `;
 
 const Title = styled.h1`
@@ -44,17 +52,18 @@ const Subtitle = styled.p`
 
 const JobGrid = styled.div`
   padding: 20px;
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
 `;
 
 const JobCard = styled.div`
   background: white;
   border-radius: 8px;
-  padding: 24px;
-  margin-bottom: 20px;
+  padding: 20px;
+  margin-bottom: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #b71c1c;
+  border-left: 4px solid #8B1538;
+  position: relative;
 `;
 
 const JobHeader = styled.div`
@@ -137,25 +146,67 @@ const ButtonContainer = styled.div`
 `;
 
 const ApplyButton = styled.button`
-  background: #b71c1c;
+  background: #8B1538;
   color: white;
   border: none;
-  padding: 12px 24px;
+  padding: 16px 24px;
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
   flex: 1;
+  
+  &:hover {
+    background: #6d1028;
+  }
 `;
 
 const SaveButton = styled.button`
   background: #ffc107;
   color: #333;
   border: none;
-  padding: 12px 24px;
+  padding: 16px 24px;
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
   flex: 1;
+  
+  &:hover {
+    background: #e0a800;
+  }
+`;
+
+const RequirementsSection = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin: 16px 0;
+`;
+
+const RequirementsContent = styled.div`
+  flex: 1;
+`;
+
+const TriASUContainer = styled.div`
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+`;
+
+const TriASULogo = styled.img`
+  width: 80px;
+  height: auto;
+  margin-bottom: 8px;
+`;
+
+const InsightText = styled.p`
+  font-size: 12px;
+  color: #666;
+  margin: 0;
+  text-align: center;
 `;
 
 const LoadingContainer = styled.div`
@@ -169,17 +220,6 @@ const LoadingContainer = styled.div`
 const LoadingText = styled.p`
   color: #333;
   font-size: 1.2rem;
-`;
-
-const InsightIcon = styled.div`
-  position: absolute;
-  right: 24px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 60px;
-  height: 60px;
-  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 10 L70 40 L50 30 L30 40 Z" fill="%23ffc107"/><rect x="45" y="30" width="10" height="40" fill="%23ffc107"/></svg>') no-repeat center;
-  background-size: contain;
 `;
 
 interface Job {
@@ -243,21 +283,28 @@ const JobRecommendationPage: React.FC = () => {
       // Parse the streaming response to extract job data
       let jobData: Job[] = [];
       if (textResponse) {
-        // Look for job_agent_result containing the job array
+        // Look specifically for the job array within job_agent_result
         const jobResultMatch = textResponse.match(/"job_agent_result":\s*"(\[[\s\S]*?\])\\n"/);
         if (jobResultMatch) {
           try {
-            // Properly unescape the JSON string
+            // Get the job array string and properly unescape it
             let jobJsonString = jobResultMatch[1];
-            jobJsonString = jobJsonString.replace(/\\n/g, '').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            
+            // Replace escaped characters
+            jobJsonString = jobJsonString
+              .replace(/\\n/g, '')  // Remove escaped newlines
+              .replace(/\\"/g, '"') // Replace escaped quotes
+              .replace(/\\\\/g, '\\'); // Replace escaped backslashes
+            
+            console.log('Parsing job array:', jobJsonString);
             jobData = JSON.parse(jobJsonString);
             console.log('Successfully parsed job data:', jobData);
           } catch (error) {
-            console.error('Error parsing job_agent_result:', error);
-            console.log('Raw job string:', jobResultMatch[1]);
+            console.error('Error parsing job array:', error);
+            console.log('Raw job array that failed:', jobResultMatch[1]);
           }
         } else {
-          console.log('No job_agent_result found in response');
+          console.log('No job array found in job_agent_result');
         }
       }
 
@@ -268,6 +315,22 @@ const JobRecommendationPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getJobCategory = (query: string) => {
+    if (!query) return 'job search';
+    
+    // Remove common phrases and extract job category
+    let cleaned = query.toLowerCase()
+      .replace(/show me|find me|search for|looking for|i want|get me/g, '')
+      .replace(/job recommendations for:|find job recommendations for:/g, '')
+      .replace(/jobs?/g, '')
+      .replace(/related/g, '')
+      .replace(/full-time|part-time|remote/g, '')
+      .trim();
+    
+    // Clean up extra spaces and return
+    return cleaned.replace(/\s+/g, ' ').trim() || 'job search';
   };
 
   const formatSalary = (lower: string, upper: string) => {
@@ -296,13 +359,17 @@ const JobRecommendationPage: React.FC = () => {
       <Header>
         <CloseButton onClick={() => navigate('/chatbot')}>×</CloseButton>
         <Title>Recommended Jobs</Title>
-        <Subtitle>Based on your UI/UX Designer preferences</Subtitle>
-        <InsightIcon />
+        <Subtitle>Based on your {getJobCategory(query)} preferences</Subtitle>
       </Header>
 
       <JobGrid>
         {jobs.map((job) => (
           <JobCard key={job["Job Id"]}>
+            <TriASUContainer>
+              <TriASULogo src={triASU} alt="triASU" />
+              <InsightText>Click here to view insights!</InsightText>
+            </TriASUContainer>
+            
             <JobHeader>
               <CompanyIcon>{getCompanyInitials(job["Employer Name"])}</CompanyIcon>
               <JobInfo>
@@ -319,14 +386,14 @@ const JobRecommendationPage: React.FC = () => {
 
             <JobDescription>{job["Job Description"]}</JobDescription>
             
-            <Requirements>
+            <RequirementsContent>
               <RequirementsTitle>Requirements:</RequirementsTitle>
               <RequirementsList>
-                <li>Proficiency with Figma, Sketch, or Adobe XD</li>
-                <li>Strong portfolio showcasing interaction design and visual design skills</li>
-                <li>Bachelor's degree in a UI/UX related field</li>
+                <li>{job["Required Experience"] !== "Not specified" ? `Experience: ${job["Required Experience"]}` : "Experience requirements not specified"}</li>
+                <li>Industry: {job["Industry"]}</li>
+                <li>Employment Type: {job["Employment Type"]}</li>
               </RequirementsList>
-            </Requirements>
+            </RequirementsContent>
 
             <ButtonContainer>
               <ApplyButton onClick={() => alert(`Applying to ${job["Job Title"]} at ${job["Employer Name"]}`)}>
