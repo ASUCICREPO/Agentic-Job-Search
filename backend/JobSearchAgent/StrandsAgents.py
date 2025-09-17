@@ -111,8 +111,10 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
     try:
         # Get memory tools
         # Conditionally include save_job_recommendations based on source
+     # Conditionally include tools based on source
         base_tools = [retrieve, get_student_profile]
         if source == "batch":
+            base_tools.append(save_student_profile)
             base_tools.append(get_job_recommendations)
             base_tools.append(save_job_recommendations)
 
@@ -128,6 +130,7 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "Available Tools:\n"
                 f"• retrieve: Search job postings using knowledgeBaseId: '{JOB_SEARCH_KB}'\n"
                 "• get_student_profile: Check user profile and notification preferences\n"
+                "• save_student_profile: Save user email and notification preferences\n"
                 "• Memory tools: Access conversation history, previous job searches, and stored preferences (read-only)\n\n"
                 "SOURCE-BASED WORKFLOW:\n"
                 "• If source='livesearch': DO NOT save job recommendations - only return search results\n"
@@ -183,9 +186,7 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "• User_fit must explain why the user matches this job based on their profile\n"
                 "• Include all available salary information (use 'Not specified' if missing)\n"
                 "• Always use the exact field names shown above\n"
-                "• If error occurs, return: []\n"
-                "• START your response directly with [ and END directly with ]\n"
-                "• NO text before the opening [ bracket and NO text after the closing ] bracket"
+                "• If error occurs, return: []"
             )
         )
 
