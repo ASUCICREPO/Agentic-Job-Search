@@ -35,14 +35,14 @@ Return a JSON object with these exact fields. If any field cannot be found in th
 
 {
   "fullName": "Full Name or N/A",
-  "location": "City, State or N/A", 
-  "headline": "Professional headline or N/A",
+  "location": "City, State or N/A",
+  "headline": "Professional headline (100-200 chars) or N/A",
   "aboutMe": "Brief professional summary (100-200 chars) or N/A",
-  "education": "School name and degree or N/A",
-  "experience": "Work experience summary or N/A",
+  "education": "Education details (100-200 chars) or N/A",
+  "experience": "Work experience details (as-is with the description, do not summarize) or N/A",
   "email": "Email address or N/A",
   "phone": "Phone number or N/A",
-  "interests": "Interests/hobbies or N/A",
+  "preferredJobRole": "Preferred job role titles (Create this field based on the resume, max 3 roles) or N/A",
   "linkedin": "LinkedIn profile URL or N/A"
 }
 

@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import ReactMarkdown from 'react-markdown';
 import { ASULogoImage, UserAvatarImage, BotAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
 import JobPopup from '../components/JobPopup';
-import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore';
 
 const ChatContainer = styled.div`
   height: 100vh;
@@ -19,12 +19,20 @@ const Header = styled.div`
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 15px;
 `;
 
 const ASULogoContainer = styled.div`
   display: flex;
   align-items: center;
+`;
+
+const LeftSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
 `;
 
 const WelcomeSection = styled.div`
@@ -55,6 +63,30 @@ const UserIcon = styled.div`
   align-items: center;
   justify-content: center;
   font-size: 12px;
+`;
+
+const ProfileButton = styled.button`
+  background: #8B1538;
+  color: white;
+  border: none;
+  border-radius: 25px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s ease, transform 0.1s ease;
+
+  &:hover {
+    background: #6d1028;
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
 `;
 
 const ChatArea = styled.div`
@@ -124,7 +156,7 @@ const Timestamp = styled.div`
 
 const InputContainer = styled.div`
   padding: 20px 80px 50px 80px;
-  background: white;
+  background: transparent;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -150,37 +182,68 @@ const InputWrapper = styled.div`
   border: 2px solid #8B1538;
   border-radius: 25px;
   padding: 5px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(139, 21, 56, 0.1);
+  transition: all 0.2s ease;
+
+  &:focus-within {
+    border-color: #6d1028;
+    box-shadow: 0 4px 12px rgba(139, 21, 56, 0.2);
+    transform: translateY(-1px);
+  }
 `;
 
 const Input = styled.input`
   flex: 1;
-  padding: 10px 15px;
+  padding: 12px 18px;
   border: none;
   outline: none;
   font-size: 1rem;
   background: transparent;
+  color: #333;
+  font-weight: 400;
+
+  &::placeholder {
+    color: #999;
+    font-style: italic;
+  }
+
+  &:focus {
+    color: #333;
+  }
 `;
 
 const SendButton = styled.button`
   background: #8B1538;
   color: white;
   border: none;
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.2rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(139, 21, 56, 0.3);
   
   &:hover {
     background: #6d0f2a;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(139, 21, 56, 0.4);
+  }
+  
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(139, 21, 56, 0.3);
   }
   
   &:disabled {
     background: #ccc;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 `;
 
@@ -259,34 +322,6 @@ const CareerAdviceTitle = styled.h3`
   font-weight: 600;
 `;
 
-const CareerAdviceList = styled.ul`
-  margin: 0;
-  padding-left: 20px;
-  color: #333;
-  line-height: 1.6;
-`;
-
-const CareerAdviceItem = styled.li`
-  margin-bottom: 8px;
-  
-  &::marker {
-    color: #8B1538;
-  }
-`;
-
-const CareerAdviceSubList = styled.ul`
-  margin: 8px 0 0 0;
-  padding-left: 20px;
-  
-  li {
-    margin-bottom: 4px;
-    color: #555;
-    
-    &::marker {
-      color: #666;
-    }
-  }
-`;
 
 interface Message {
     id: number;
@@ -299,16 +334,19 @@ interface Message {
 }
 
 interface Job {
-  "Job Id": string;
-  "Job Title": string;
-  "Job Description": string;
-  "Employer Name": string;
-  "Salary Pay Upper Cap": string;
-  "Salary Pay Lower Cap": string;
-  "Location": string;
-  "Employment Type": string;
-  "Industry": string;
-  "Required Experience": string;
+  id: string;
+  title: string;
+  description: string;
+  company: string;
+  salary_max: string;
+  salary_min: string;
+  fit: string;
+  location: string;
+  type: string;
+  industry: string;
+  deadline: string;
+  remote: string;
+  experience: string;
 }
 
 const ChatBotPage: React.FC = () => {
@@ -322,14 +360,25 @@ const ChatBotPage: React.FC = () => {
     const [isSpecialTyping, setIsSpecialTyping] = useState(false);
     const [showJobPopup, setShowJobPopup] = useState(false);
     const [jobs, setJobs] = useState<Job[]>([]);
-    const [currentJobQuery, setCurrentJobQuery] = useState<string>('');
     const chatAreaRef = useRef<HTMLDivElement>(null);
+    const currentBotMessageRef = useRef<Message | null>(null);
 
     useEffect(() => {
         if (chatAreaRef.current) {
             chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
         }
     }, [messages, isTyping]);
+
+    // Handle return from profile page
+    useEffect(() => {
+        const profileUpdated = location.state?.profileUpdated;
+        if (profileUpdated) {
+            // Profile was updated, show success message and navigate to job options
+            setTimeout(() => {
+                navigate('/job-options', { state: { userName: userName } });
+            }, 1000); // Brief delay to show the transition
+        }
+    }, [location.state, navigate, userName]);
 
     const formatTime = (date: Date) => {
         return date.toLocaleTimeString('en-US', {
@@ -339,246 +388,38 @@ const ChatBotPage: React.FC = () => {
         });
     };
 
-
-
-    const fetchJobs = async (query: string) => {
-        try {
-            console.log('Fetching jobs for query:', query);
-            const client = new BedrockAgentCoreClient({
-                region: process.env.REACT_APP_AWS_REGION!,
-                credentials: {
-                    accessKeyId: process.env.REACT_APP_AWS_ACCESS_KEY_ID!,
-                    secretAccessKey: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY!,
-                },
-            });
-
-            const runtimeSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 20)}-extra`;
-            console.log('Using session ID:', runtimeSessionId);
-            
-            const payload = {
-                prompt: `Find job recommendations for: ${query}`,
-                session_id: runtimeSessionId,
-                source: "livesearch"
-            };
-            console.log('Payload:', payload);
-
-            const input = {
-                runtimeSessionId: runtimeSessionId,
-                agentRuntimeArn: process.env.REACT_APP_AGENT_RUNTIME_ARN!,
-                qualifier: process.env.REACT_APP_AGENT_QUALIFIER || "DEFAULT",
-                payload: new TextEncoder().encode(JSON.stringify(payload)),
-            };
-            console.log('Agent input:', input);
-
-            const command = new InvokeAgentRuntimeCommand(input);
-            const response = await client.send(command);
-            console.log('Raw agent response:', response);
-            
-            const textResponse = await response.response?.transformToString();
-            console.log('Text response:', textResponse);
-            
-            let jobData: Job[] = [];
-            if (textResponse) {
-                // Look for job_agent_result in the streaming response
-                const jobResultMatch = textResponse.match(/"job_agent_result":\s*"(\[[\s\S]*?\])(?:\\n\\nWould you like daily notifications[^"]*)?"/);
-                
-                if (jobResultMatch) {
-                    console.log('Found job result match:', jobResultMatch[1]);
-                    try {
-                        let jobJsonString = jobResultMatch[1]
-                            .replace(/\\n/g, '\n')  // Convert escaped newlines
-                            .replace(/\\"/g, '"')  // Convert escaped quotes
-                            .replace(/\\\\/g, '\\') // Convert escaped backslashes
-                            .replace(/\\&/g, '&');   // Convert escaped ampersands
-                        
-                        // Remove any trailing notification text that might be part of the JSON
-                        const cleanJsonMatch = jobJsonString.match(/(\[[\s\S]*?\])/);
-                        if (cleanJsonMatch) {
-                            jobJsonString = cleanJsonMatch[1];
-                        }
-                        
-                        console.log('Cleaned job JSON string:', jobJsonString);
-                        jobData = JSON.parse(jobJsonString);
-                        console.log('Parsed job data:', jobData);
-                    } catch (error) {
-                        console.error('Error parsing job data:', error);
-                        console.log('Raw match that failed to parse:', jobResultMatch[1]);
-                    }
-                } else {
-                    console.log('No job_agent_result found in response');
-                    console.log('Full response for debugging:', textResponse);
-                }
-            } else {
-                console.log('No text response received');
-            }
-            
-            if (jobData.length === 0) {
-                jobData = [
-                    {
-                        "Job Id": "10000039",
-                        "Job Title": "Software Developer",
-                        "Job Description": "ASU-ready engineering role applying hands-on, project-based learning to real problems.",
-                        "Employer Name": "Apex Media 39",
-                        "Salary Pay Upper Cap": "111096",
-                        "Salary Pay Lower Cap": "92460",
-                        "Location": "Arizona, United States",
-                        "Employment Type": "Full-Time",
-                        "Industry": "Engineering & Technology",
-                        "Required Experience": "Not specified"
-                    },
-                    {
-                        "Job Id": "10000089",
-                        "Job Title": "Machine Learning Engineer",
-                        "Job Description": "As a Machine Learning Engineer at Sonoran Ventures 89, you will design and build scalable solutions.",
-                        "Employer Name": "Sonoran Ventures 89",
-                        "Salary Pay Upper Cap": "110663",
-                        "Salary Pay Lower Cap": "71789",
-                        "Location": "Arizona, United States",
-                        "Employment Type": "Full-Time",
-                        "Industry": "Engineering & Technology",
-                        "Required Experience": "Recent Graduate (0-1 years)"
-                    },
-                    {
-                        "Job Id": "10000284",
-                        "Job Title": "Software Engineer I",
-                        "Job Description": "As a Software Engineer I at Saguaro Publishing 284, you will design and build scalable solutions.",
-                        "Employer Name": "Saguaro Publishing 284",
-                        "Salary Pay Upper Cap": "Not specified",
-                        "Salary Pay Lower Cap": "Not specified",
-                        "Location": "Mesa, Arizona, United States",
-                        "Employment Type": "Full-Time",
-                        "Industry": "Engineering & Technology",
-                        "Required Experience": "Graduate"
-                    }
-                ];
-            }
-            
-            console.log('Final job data to return:', jobData);
-            return jobData;
-        } catch (error) {
-            console.error('Error fetching jobs:', error);
-            console.error('Error details:', error);
-            return [];
-        }
+    const handleProfileClick = () => {
+        navigate('/', { state: { fromChatbot: true, userName: userName } });
     };
+
+
+
 
     const handleViewJobs = () => {
         setShowJobPopup(true);
     };
 
-    const isJobQuery = (text: string): boolean => {
-        const lowerText = text.toLowerCase();
-        
-        const jobSearchPatterns = [
-            /find.*job/,
-            /search.*job/,
-            /looking for.*job/,
-            /show.*job/,
-            /recommend.*job/,
-            /job.*recommend/,
-            /job.*search/,
-            /job.*opening/,
-            /employment.*opportunit/,
-            /hiring.*position/
-        ];
-        
-        return jobSearchPatterns.some(pattern => pattern.test(lowerText));
-    };
-
-    const isCareerAdviceQuery = (text: string): boolean => {
-        const lowerText = text.toLowerCase();
-        
-        const careerAdvicePatterns = [
-            /career.*advice/,
-            /career.*guidance/,
-            /career.*help/,
-            /career.*tips/,
-            /career.*counsel/,
-            /professional.*development/,
-            /career.*planning/,
-            /career.*path/,
-            /career.*opportunit/
-        ];
-        
-        return careerAdvicePatterns.some(pattern => pattern.test(lowerText));
-    };
 
     const formatCareerAdvice = (text: string) => {
         return (
             <CareerAdviceContainer>
                 <CareerAdviceTitle>Career Guidance</CareerAdviceTitle>
                 <div style={{ lineHeight: '1.6' }}>
-                    {text.split('\n').map((line, index) => {
-                        const trimmedLine = line.trim();
-                        if (!trimmedLine) return <br key={index} />;
-                        
-                        // Section headers (like "Pros of Switching to Data Science:")
-                        if (trimmedLine.endsWith(':') && !trimmedLine.startsWith('-') && !trimmedLine.match(/^\d+\./)) {
-                            return (
-                                <div key={index} style={{ 
-                                    fontWeight: 'bold', 
-                                    color: '#8B1538', 
-                                    fontSize: '1.1rem',
-                                    marginTop: '16px',
-                                    marginBottom: '8px'
-                                }}>
-                                    {trimmedLine}
-                                </div>
-                            );
-                        }
-                        // Main numbered points (1. Career Opportunities)
-                        else if (/^\d+\./.test(trimmedLine)) {
-                            return (
-                                <div key={index} style={{
-                                    fontWeight: '600',
-                                    color: '#333',
-                                    marginTop: '12px',
-                                    marginBottom: '6px'
-                                }}>
-                                    {trimmedLine}
-                                </div>
-                            );
-                        }
-                        // Sub-points with dashes (- Data Scientist)
-                        else if (/^\s*-/.test(line)) {
-                            return (
-                                <div key={index} style={{ 
-                                    marginLeft: '20px', 
-                                    color: '#555', 
-                                    marginBottom: '4px',
-                                    display: 'flex',
-                                    alignItems: 'flex-start'
-                                }}>
-                                    <span style={{ marginRight: '8px', color: '#8B1538' }}>•</span>
-                                    <span>{trimmedLine.replace(/^\s*-\s*/, '')}</span>
-                                </div>
-                            );
-                        }
-                        // Indented content (salary ranges, descriptions)
-                        else if (/^\s{2,}/.test(line)) {
-                            return (
-                                <div key={index} style={{ 
-                                    marginLeft: '40px', 
-                                    color: '#666', 
-                                    fontSize: '0.95rem',
-                                    marginBottom: '4px'
-                                }}>
-                                    {trimmedLine}
-                                </div>
-                            );
-                        }
-                        // Regular paragraphs
-                        else {
-                            return (
-                                <div key={index} style={{
-                                    color: '#333',
-                                    marginBottom: '8px'
-                                }}>
-                                    {trimmedLine}
-                                </div>
-                            );
-                        }
-                    })}
+                    <ReactMarkdown
+                        components={{
+                            h1: ({children}) => <h3 style={{color: '#8B1538', margin: '16px 0 8px 0', fontSize: '1.2rem'}}>{children}</h3>,
+                            h2: ({children}) => <h4 style={{color: '#8B1538', margin: '14px 0 6px 0', fontSize: '1.1rem'}}>{children}</h4>,
+                            h3: ({children}) => <h5 style={{color: '#8B1538', margin: '12px 0 4px 0', fontSize: '1rem'}}>{children}</h5>,
+                            p: ({children}) => <p style={{margin: '8px 0', color: '#333'}}>{children}</p>,
+                            ul: ({children}) => <ul style={{margin: '8px 0', paddingLeft: '20px'}}>{children}</ul>,
+                            ol: ({children}) => <ol style={{margin: '8px 0', paddingLeft: '20px'}}>{children}</ol>,
+                            li: ({children}) => <li style={{margin: '4px 0', color: '#555'}}>{children}</li>,
+                            strong: ({children}) => <strong style={{color: '#8B1538', fontWeight: '600'}}>{children}</strong>,
+                            em: ({children}) => <em style={{color: '#666', fontStyle: 'italic'}}>{children}</em>
+                        }}
+                    >
+                        {text}
+                    </ReactMarkdown>
                 </div>
             </CareerAdviceContainer>
         );
@@ -598,73 +439,43 @@ const ChatBotPage: React.FC = () => {
         const currentInput = inputValue;
         setInputValue('');
         
-        // Check if this is a job search or career advice query and show special typing immediately
-        if (isJobQuery(currentInput) || isCareerAdviceQuery(currentInput)) {
-            setIsSpecialTyping(true);
-        } else {
-            setIsTyping(true);
-        }
+        // Show regular typing indicator initially
+        setIsTyping(true);
 
         try {
-            const response = await invokeAgent(currentInput);
-            console.log('Agent response:', response);
-            
-            // Check for job search response
-            if (response.includes('"job_search_started": true')) {
-                console.log('Job search detected in response');
+            await invokeAgent(currentInput, {
+                onThinking: (thinking: string) => {
+                    console.log('Agent thinking:', thinking);
+                },
                 
-                // Process immediately since special typing is already showing
-                setTimeout(() => {
+                onJobSearchStarted: () => {
+                    console.log('Job search started');
+                    setIsTyping(false);
+                    setIsSpecialTyping(true);
+                },
+                
+                onCareerAdviceStarted: () => {
+                    console.log('Career advice started');
+                    setIsTyping(false);
+                    setIsSpecialTyping(true);
+                },
+                
+                onJobResults: (jobs: Job[], responseText: string) => {
+                    console.log('Job results received:', jobs);
                     setIsSpecialTyping(false);
-                    // Extract jobs directly from the agent response
-                    const jobResultMatch = response.match(/"job_agent_result":\s*"([\s\S]*?)"(?:\s*}|\s*data:)/);
-                    if (jobResultMatch) {
-                        try {
-                            let jobJsonString = jobResultMatch[1]
-                                .replace(/\\n/g, '\n')
-                                .replace(/\\"/g, '"')
-                                .replace(/\\\\/g, '\\');
-                            
-                            // Remove any trailing notification text
-                            const cleanJsonMatch = jobJsonString.match(/(\[[\s\S]*?\])/);
-                            if (cleanJsonMatch) {
-                                jobJsonString = cleanJsonMatch[1];
-                            }
-                            
-                            console.log('Extracted job data from agent response:', jobJsonString);
-                            const jobData = JSON.parse(jobJsonString);
-                            
-                            if (jobData && jobData.length > 0) {
-                                setJobs(jobData);
-                                
-                                const botMessage: Message = {
-                                    id: Date.now() + Math.random(),
-                                    text: "Here is your desired job list.",
-                                    isUser: false,
-                                    timestamp: new Date(),
-                                    hasJobButton: true,
-                                    jobQuery: currentInput
-                                };
-                                setMessages(prev => [...prev, botMessage]);
-                            } else {
-                                const errorMessage: Message = {
-                                    id: Date.now() + Math.random(),
-                                    text: "Sorry, I couldn't find any job opportunities at the moment. Please try again later.",
-                                    isUser: false,
-                                    timestamp: new Date()
-                                };
-                                setMessages(prev => [...prev, errorMessage]);
-                            }
-                        } catch (error) {
-                            console.error('Error parsing job data from agent response:', error);
-                            const errorMessage: Message = {
-                                id: Date.now() + Math.random(),
-                                text: "Sorry, I'm having trouble processing the job results. Please try again later.",
-                                isUser: false,
-                                timestamp: new Date()
-                            };
-                            setMessages(prev => [...prev, errorMessage]);
-                        }
+                    
+                    if (jobs && jobs.length > 0) {
+                        setJobs(jobs);
+                        
+                        const botMessage: Message = {
+                            id: Date.now() + Math.random(),
+                            text: responseText,
+                            isUser: false,
+                            timestamp: new Date(),
+                            hasJobButton: true,
+                            jobQuery: currentInput
+                        };
+                        setMessages(prev => [...prev, botMessage]);
                     } else {
                         const errorMessage: Message = {
                             id: Date.now() + Math.random(),
@@ -674,68 +485,58 @@ const ChatBotPage: React.FC = () => {
                         };
                         setMessages(prev => [...prev, errorMessage]);
                     }
-                    
-                }, 1500);
-                return;
-            }
-            
-            // Check for career advice response
-            if (response.includes('"carrier_advice_started": true')) {
-                console.log('Career advice detected in response');
+                },
                 
-                // Process immediately since special typing is already showing
-                setTimeout(() => {
+                onCareerAdvice: (advice: string) => {
+                    console.log('Career advice received');
                     setIsSpecialTyping(false);
-                    const careerAdviceMatch = response.match(/"carrier_advice_result":\s*"([\s\S]*?)"\s*}/);
-                    if (careerAdviceMatch) {
-                        const adviceText = careerAdviceMatch[1]
-                            .replace(/\\n/g, '\n')
-                            .replace(/\\"/g, '"')
-                            .replace(/\\\\/g, '\\');
-                        
-                        console.log('Extracted career advice:', adviceText);
-                        
-                        const botMessage: Message = {
+                    
+                    const botMessage: Message = {
+                        id: Date.now() + Math.random(),
+                        text: advice,
+                        isUser: false,
+                        timestamp: new Date(),
+                        isCareerAdvice: true
+                    };
+                    setMessages(prev => [...prev, botMessage]);
+                },
+                
+                onResponse: (response: string) => {
+                    if (!currentBotMessageRef.current) {
+                        currentBotMessageRef.current = {
                             id: Date.now() + Math.random(),
-                            text: adviceText,
+                            text: response,
                             isUser: false,
-                            timestamp: new Date(),
-                            isCareerAdvice: true
+                            timestamp: new Date()
                         };
-                        setMessages(prev => [...prev, botMessage]);
+                        setMessages(prev => [...prev, currentBotMessageRef.current!]);
+                    } else {
+                        // Update existing message
+                        setMessages(prev => prev.map(msg => 
+                            msg.id === currentBotMessageRef.current!.id 
+                                ? { ...msg, text: response }
+                                : msg
+                        ));
                     }
-                }, 1500);
-                return;
-            }
-
-            console.log('Processing as regular query:', currentInput);
-
-            // Extract final_result from the response
-            let displayText = '';
-            try {
-                const finalResultMatch = response.match(/"final_result":\s*"([^"]+)"/);
-                if (finalResultMatch) {
-                    displayText = finalResultMatch[1]
-                        .replace(/\\n/g, '\n')
-                        .replace(/\\"/g, '"')
-                        .replace(/\\\\/g, '\\');
-                    console.log('Extracted final_result:', displayText);
-                } else {
-                    console.log('No final_result found, using full response');
-                    displayText = response;
+                },
+                
+                onError: (error: string) => {
+                    console.error('Agent error:', error);
+                    // Only show error message if it's not a generic processing error
+                    if (!error.includes("Error processing request: 'output'")) {
+                        const errorMessage: Message = {
+                            id: Date.now() + Math.random(),
+                            text: error,
+                            isUser: false,
+                            timestamp: new Date()
+                        };
+                        setMessages(prev => [...prev, errorMessage]);
+                    } else {
+                        console.log('Ignoring backend processing error - job results already received');
+                    }
                 }
-            } catch (error) {
-                console.error('Error extracting final_result:', error);
-                displayText = response;
-            }
-
-            const botMessage: Message = {
-                id: Date.now() + Math.random(),
-                text: displayText,
-                isUser: false,
-                timestamp: new Date()
-            };
-            setMessages(prev => [...prev, botMessage]);
+            });
+            
         } catch (error) {
             console.error('Error in handleSendMessage:', error);
             const errorMessage: Message = {
@@ -760,22 +561,25 @@ const ChatBotPage: React.FC = () => {
     return (
         <ChatContainer>
             <Header>
-                <ASULogoContainer>
-                    <ASULogoImage />
-                </ASULogoContainer>
-                <WelcomeSection>
-                    <WelcomeTitle>Welcome to ASU Job Search!</WelcomeTitle>
-                    <UserGreeting>
-                        <UserIcon>👤</UserIcon>
-                        Hi, {userName}
-                    </UserGreeting>
-                </WelcomeSection>
+                <LeftSection>
+                    <ASULogoContainer>
+                        <ASULogoImage />
+                    </ASULogoContainer>
+                    <WelcomeSection>
+                        <WelcomeTitle>Welcome to ASU Job Search!</WelcomeTitle>
+                        <UserGreeting>
+                            <UserIcon>👤</UserIcon>
+                            Hi, {userName}
+                        </UserGreeting>
+                    </WelcomeSection>
+                </LeftSection>
+                <ProfileButton onClick={handleProfileClick}>
+                    👤 Edit Profile
+                </ProfileButton>
             </Header>
 
             <ChatArea ref={chatAreaRef}>
                 {messages.map((message, index) => {
-                    // Calculate bot message index for color variation
-                    const botMessageIndex = messages.slice(0, index + 1).filter(m => !m.isUser).length - 1;
 
                     return (
                         <MessageContainer key={message.id} $isUser={message.isUser}>
@@ -797,9 +601,6 @@ const ChatBotPage: React.FC = () => {
                                                     <ViewJobsButton onClick={handleViewJobs}>
                                                         <strong>Click to View</strong> Jobs
                                                     </ViewJobsButton>
-                                                    <div style={{ textAlign: 'center', marginTop: '8px' }}>
-                                                        Would you like daily notifications with job recommendations?
-                                                    </div>
                                                 </>
                                             )}
                                         </BotMessageBubble>
@@ -867,7 +668,8 @@ const ChatBotPage: React.FC = () => {
             {showJobPopup && (
                 <JobPopup 
                     jobs={jobs} 
-                    onClose={() => setShowJobPopup(false)} 
+                    onClose={() => setShowJobPopup(false)}
+                    selectedJobRole={jobs.length > 0 ? jobs[0].title : undefined}
                 />
             )}
         </ChatContainer>

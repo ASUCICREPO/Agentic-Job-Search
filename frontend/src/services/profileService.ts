@@ -34,8 +34,10 @@ export interface ProfileData {
   experience: string;
   email: string;
   phone: string;
-  interests: string;
+  preferredJobRole: string;
   linkedin: string;
+  jobNotifications: boolean;
+  communicationMethod: string;
 }
 
 // ---------- helpers ----------
@@ -117,8 +119,10 @@ function toSchema(src: any): ProfileData {
     experience: get('experience'),
     email: get('email'),
     phone: get('phone'),
-    interests: get('interests'),
+    preferredJobRole: get('preferredJobRole'),
     linkedin: get('linkedin'),
+    jobNotifications: false, // Will be overridden by conversion logic
+    communicationMethod: get('communicationMethod'),
   };
 }
 
@@ -184,17 +188,101 @@ export const uploadResumeAndParse = async (file: File): Promise<ProfileData> => 
   }
 };
 
-// Save with EXACT schema
+// Convert UI format to backend format
+function toBackendFormat(profileData: ProfileData) {
+  const baseData = toSchema(profileData);
+
+  // Convert jobNotifications + communicationMethod to optinStatus
+  let optinStatus = '';
+  if (baseData.jobNotifications) {
+    const methods = (baseData.communicationMethod || '').split(',').filter(m => m.trim());
+    if (methods.includes('email') && methods.includes('phone')) {
+      optinStatus = 'both';
+    } else if (methods.includes('email')) {
+      optinStatus = 'email';
+    } else if (methods.includes('phone')) {
+      optinStatus = 'phone';
+    }
+  }
+
+  return {
+    ...baseData,
+    optinStatus,
+    jobNotifications: undefined, // Remove the old field
+  };
+}
+
+// Save with backend format
 export const saveProfile = async (profileData: ProfileData): Promise<void> => {
   try {
-    const schemaData = toSchema(profileData);
+    const backendData = toBackendFormat(profileData);
     const payload = {
-      parsed_data: schemaData
+      parsed_data: backendData
     };
 
     await postJson(SAVE_PROFILE_URL!, payload);
   } catch (error) {
     console.error('Profile save process failed:', error);
+    throw error;
+  }
+};
+
+// Convert backend format to UI format
+function fromBackendFormat(backendData: any): ProfileData {
+  const uiData = toSchema(backendData);
+
+  // Convert optinStatus to jobNotifications + communicationMethod
+  const optinStatus = backendData.optinStatus || '';
+  if (optinStatus === 'email') {
+    uiData.jobNotifications = true;
+    uiData.communicationMethod = 'email';
+  } else if (optinStatus === 'phone') {
+    uiData.jobNotifications = true;
+    uiData.communicationMethod = 'phone';
+  } else if (optinStatus === 'both') {
+    uiData.jobNotifications = true;
+    uiData.communicationMethod = 'email,phone';
+  } else {
+    uiData.jobNotifications = false;
+    uiData.communicationMethod = '';
+  }
+
+  return uiData;
+}
+
+// Retrieve profile by email
+export const getProfile = async (email: string): Promise<ProfileData | null> => {
+  try {
+    const url = `${SAVE_PROFILE_URL}?email=${encodeURIComponent(email)}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const raw = await response.text();
+    let data: any = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (parseError) {
+      console.error('Failed to parse JSON response:', parseError);
+      throw new Error(`Non-JSON response from ${url}: ${raw}`);
+    }
+
+    if (!response.ok) {
+      const msg = data?.error || data?.message || raw || `HTTP ${response.status}`;
+      console.error('HTTP error response:', msg);
+      throw new Error(msg);
+    }
+
+    if (data.profile) {
+      return fromBackendFormat(data.profile);
+    } else {
+      return null; // Profile not found
+    }
+  } catch (error) {
+    console.error('Profile retrieval process failed:', error);
     throw error;
   }
 };
