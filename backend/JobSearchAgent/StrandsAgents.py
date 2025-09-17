@@ -261,6 +261,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 "• Personalize all advice based on user's conversation history and stored preferences\n"
                 "• Return comprehensive, helpful responses that directly address the user's query\n"
                 "• Include specific examples, tips, and actionable steps whenever possible"
+                "ALWAYS include relevant links from the career resources knowledge base using knowledgeBaseId: '{CARRIER_RESOURCE_KB}'."
             )
         )
 
@@ -296,7 +297,7 @@ class MultiAgentJobSearchSystem:
         memory_tools = _get_memory_tools(session_id, email)
 
         # Combine all available tools
-        tools = [job_search_agent_tool, career_advice_agent_tool] + memory_tools
+        tools = [job_search_agent_tool, career_advice_agent_tool, save_student_profile, get_student_profile] + memory_tools
 
         self.orchestrator_agent = Agent(
             tools=tools,
@@ -308,6 +309,8 @@ class MultiAgentJobSearchSystem:
                 "Available Specialized Agents:\n"
                 "• job_search_agent_tool: Specialized in job search and job recommendations\n"
                 "• career_advice_agent_tool: Specialized in career guidance and professional development\n"
+                "• save_student_profile: Save user notification preferences\n"
+                "• get_student_profile: Check user profile and preferences\n"
                 "• Memory tools: Access conversation history, preferences, and stored user information (read-only)\n\n"
                 "PERSONALIZED JOB SEARCH WORKFLOW:\n"
                 "1) Check memory for user's job search history and preferences\n"
@@ -323,10 +326,15 @@ class MultiAgentJobSearchSystem:
                 "• Use existing preferences to personalize job search queries\n"
                 "• Provide context about which preferences are being used\n"
                 "• Store updated preferences using save_student_profile for future sessions\n\n"
+                "NOTIFICATION OPT-IN DETECTION:\n"
+                "• If user says 'Yes', 'Yes I would like notifications', 'I want notifications', 'Sign me up', etc.\n"
+                "• IMMEDIATELY call save_student_profile(email=user_email, opt_in_status=True)\n"
+                "• Return confirmation message like 'Great! You\'re now signed up for daily job notifications.'\n\n"
                 "ROUTING PRINCIPLES:\n"
                 "• Job search queries → retrieve preferences → job_search_agent_tool\n"
                 "• Career advice queries → career_advice_agent_tool directly\n"
-                "• Profile updates → career_advice_agent_tool with save_student_profile\n"
+                "• Notification opt-in responses ('Yes', 'No', 'I want notifications') → save_student_profile directly\n"
+                "• Profile updates → save_student_profile directly\n"
                 "• Always pass source parameter to specialized agents\n"
                 "• Use conversation context to determine appropriate routing\n\n"
                 "CRITICAL RESPONSE HANDLING - EXACT PASSTHROUGH:\n"
@@ -425,6 +433,7 @@ async def handle_agent_request(payload):
         carrier_advice_thinking_sent = False  # Flag to prevent duplicate thinking messages
         job_search_started = False  # Track if job search was initiated
         carrier_advice_started = False  # Track if career advice was initiated
+        job_results_received = False  # Track if job results were received
 
         async for event in orchestrator_system.orchestrator_agent.stream_async(enhanced_prompt):
 
@@ -449,6 +458,7 @@ async def handle_agent_request(payload):
                                         if "text" in result_content:
                                             yield {"job_agent_result": result_content["text"]}
                                             final_response = result_content["text"]
+                                            job_results_received = True
                                 # Only send carrier_advice_result if career advice was initiated
                                 elif carrier_advice_started and "content" in tool_result:
                                     for result_content in tool_result["content"]:
@@ -476,6 +486,16 @@ async def handle_agent_request(payload):
                 # Error events
                 elif "error" in event:
                     yield {"error": event["error"]}
+
+        # Handle notification preferences after job search
+        if job_results_received and email:
+            try:
+                profile = get_student_profile(email)
+                if not profile or not profile.get('optInStatus', False):
+                    notification_msg = "Would you like daily notifications with job recommendations?"
+                    yield {"notification_prompt": notification_msg}
+            except Exception as e:
+                print(f"Error checking notification preferences: {e}")
 
         # Create memory event for assistant response
         if final_response:
