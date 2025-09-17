@@ -1,7 +1,7 @@
 import React from 'react';
 import asuLogo from '../assets/images/asu-logo.png';
 import botAvatar from '../assets/images/bot-avatar.png';
-import userAvatar from '../assets/images/user-avatar.png';
+import userAvatar from '../assets/images/my_profile.png';
 
 export const ASULogoImage: React.FC<{ className?: string }> = ({ className }) => (
   <img 
