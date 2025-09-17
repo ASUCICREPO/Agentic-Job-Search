@@ -84,8 +84,8 @@ src/
 │   ├── ImageAssets.tsx      # Customizable image components
 │   └── LoadingSpinner.tsx   # Loading animation
 ├── pages/
-│   ├── HomePage.tsx         # Landing page
-│   ├── JobSearchPage.tsx    # Job search portal
+│   ├── ProfilePage.tsx      # User profile setup page
+│   ├── JobOptionsPage.tsx   # Job search options page
 │   └── ChatBotPage.tsx      # Main chatbot interface
 ├── assets/
 │   └── images/              # Place your custom images here
