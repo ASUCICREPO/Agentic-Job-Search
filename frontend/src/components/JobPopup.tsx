@@ -1,6 +1,8 @@
 import React from 'react';
 import styled from 'styled-components';
 import triASU from '../assets/images/triASU.png';
+import { saveProfile, getProfile, ProfileData } from '../services/profileService';
+import { getUserEmail } from '../utils/cookieUtils';
 
 const PopupOverlay = styled.div`
   position: fixed;
@@ -18,19 +20,70 @@ const PopupOverlay = styled.div`
 const PopupContainer = styled.div`
   background: white;
   border-radius: 12px;
-  width: 90%;
-  max-width: 1000px;
-  max-height: 80vh;
-  overflow-y: auto;
+  width: 95%;
+  max-width: 1200px;
+  max-height: 90vh;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 `;
 
 const PopupHeader = styled.div`
-  padding: 20px;
+  padding: 15px 20px;
   border-bottom: 1px solid #eee;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
+  background: white;
+  border-radius: 12px 12px 0 0;
+`;
+
+const NotificationToggleContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+`;
+
+const ToggleLabel = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #333;
+  font-weight: 500;
+  white-space: nowrap;
+`;
+
+const ToggleSwitch = styled.div<{ $isOn: boolean }>`
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background: ${props => props.$isOn ? '#8B1538' : '#ccc'};
+  border-radius: 9px;
+  transition: background 0.2s ease;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: ${props => props.$isOn ? '16px' : '2px'};
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    transition: left 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+`;
+
+const ToggleInput = styled.input`
+  display: none;
 `;
 
 const Title = styled.h2`
@@ -51,38 +104,34 @@ const CloseButton = styled.button`
 `;
 
 const JobGrid = styled.div`
-  padding: 20px;
+  padding: 15px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
+  overflow-y: auto;
+  flex: 1;
+  border-radius: 0 0 12px 12px;
 `;
 
 const JobCard = styled.div`
   background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #8B1538;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-left: 3px solid #8B1538;
   position: relative;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
 `;
 
 const JobHeader = styled.div`
   display: flex;
+  justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 16px;
-`;
-
-const CompanyIcon = styled.div`
-  width: 40px;
-  height: 40px;
-  background: #f0f0f0;
-  border-radius: 4px;
-  margin-right: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  color: #666;
+  margin-bottom: 8px;
 `;
 
 const JobInfo = styled.div`
@@ -91,23 +140,23 @@ const JobInfo = styled.div`
 
 const JobTitle = styled.h3`
   color: #333;
-  font-size: 1.3rem;
-  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+  margin: 0 0 2px 0;
   font-weight: 600;
 `;
 
 const Company = styled.p`
   color: #666;
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 `;
 
 const JobMeta = styled.div`
   display: flex;
   align-items: center;
-  gap: 20px;
-  margin: 12px 0;
-  font-size: 0.9rem;
+  gap: 15px;
+  margin: 8px 0;
+  font-size: 0.8rem;
   color: #666;
 `;
 
@@ -119,8 +168,13 @@ const MetaItem = styled.div`
 
 const JobDescription = styled.p`
   color: #555;
-  line-height: 1.6;
-  margin: 16px 0;
+  line-height: 1.4;
+  margin: 10px 0;
+  font-size: 0.9rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
 
 const RequirementsContent = styled.div`
@@ -129,74 +183,93 @@ const RequirementsContent = styled.div`
 
 const RequirementsTitle = styled.h4`
   color: #333;
-  font-size: 1rem;
-  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  margin: 0 0 4px 0;
 `;
 
 const RequirementsList = styled.ul`
   margin: 0;
-  padding-left: 20px;
+  padding-left: 16px;
   color: #555;
+  font-size: 0.85rem;
+  line-height: 1.3;
 `;
 
 const ButtonContainer = styled.div`
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
+  margin-top: 12px;
 `;
 
 const ApplyButton = styled.button`
   background: #8B1538;
   color: white;
   border: none;
-  padding: 16px 24px;
-  border-radius: 6px;
+  padding: 10px 24px;
+  border-radius: 25px;
   font-weight: 600;
   cursor: pointer;
-  flex: 1;
-  
+  width: auto;
+  min-width: 140px;
+  max-width: 200px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 3px 6px rgba(139, 21, 56, 0.25);
+  margin: 0;
+  display: inline-block;
+
   &:hover {
     background: #6d1028;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 12px rgba(139, 21, 56, 0.35);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 `;
 
-const SaveButton = styled.button`
-  background: #ffc107;
-  color: #333;
-  border: none;
-  padding: 16px 24px;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  flex: 1;
-  
-  &:hover {
-    background: #e0a800;
-  }
-`;
 
 const TriASUContainer = styled.div`
   position: absolute;
-  right: 20px;
-  bottom: 100px;
+  right: 50px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
 `;
 
-const TriASULogo = styled.img`
-  width: 80px;
+const TriASULogo = styled.img<{ $isClicked: boolean }>`
+  width: 50px;
   height: auto;
   cursor: pointer;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  animation: ${props => props.$isClicked ? 'none' : 'pulse 2s infinite'};
+
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.15);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  &:hover {
+    animation: none;
+    transform: scale(1.05);
+  }
 `;
 
 const InsightText = styled.p`
-  font-size: 12px;
+  font-size: 10px;
   color: #666;
   margin: 0;
   text-align: center;
   cursor: pointer;
+  line-height: 1.2;
 `;
 
 const UserFitModal = styled.div`
@@ -234,26 +307,30 @@ const UserFitText = styled.p`
 `;
 
 interface Job {
-  "Job Id": string;
-  "Job Title": string;
-  "Job Description": string;
-  "Employer Name": string;
-  "Salary Pay Upper Cap": string;
-  "Salary Pay Lower Cap": string;
-  "Location": string;
-  "Employment Type": string;
-  "Industry"?: string;
-  "Required Experience": string;
-  "User_fit"?: string;
+  id: string;
+  title: string;
+  description: string;
+  company: string;
+  salary_max: string;
+  salary_min: string;
+  location: string;
+  type: string;
+  industry?: string;
+  experience: string;
+  fit?: string;
 }
 
 interface JobPopupProps {
   jobs: Job[];
   onClose: () => void;
+  selectedJobRole?: string;
 }
 
-const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose }) => {
+const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) => {
   const [selectedUserFit, setSelectedUserFit] = React.useState<string | null>(null);
+  const [jobNotifications, setJobNotifications] = React.useState<{ [jobId: string]: boolean }>({});
+  const [isUpdatingProfile, setIsUpdatingProfile] = React.useState(false);
+  const [clickedLogos, setClickedLogos] = React.useState<Set<string>>(new Set());
 
   const formatSalary = (lower: string, upper: string) => {
     if (lower === "Not specified" || upper === "Not specified") {
@@ -262,64 +339,123 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose }) => {
     return `$${parseInt(lower).toLocaleString()}-$${parseInt(upper).toLocaleString()}/year`;
   };
 
-  const getCompanyInitials = (companyName: string) => {
-    return companyName.split(' ').map(word => word[0]).join('').substring(0, 2).toUpperCase();
-  };
-
-  const handleTriASUClick = (userFit: string | undefined) => {
-    if (userFit) {
-      setSelectedUserFit(userFit);
+  const handleTriASUClick = (fit: string | undefined, jobId: string) => {
+    if (fit) {
+      setSelectedUserFit(fit);
+      setClickedLogos(prev => new Set(prev).add(jobId));
     }
   };
 
+  const handleJobToggleChange = (jobId: string, enabled: boolean) => {
+    setJobNotifications(prev => ({
+      ...prev,
+      [jobId]: enabled
+    }));
+  };
+
+  const handleClose = async () => {
+    // Check if any job notifications are enabled
+    const enabledJobs = Object.entries(jobNotifications).filter(([_, enabled]) => enabled);
+    
+    if (enabledJobs.length > 0) {
+      setIsUpdatingProfile(true);
+      try {
+        const userEmail = getUserEmail();
+        if (userEmail) {
+          // Get current profile data
+          const currentProfile = await getProfile(userEmail);
+          if (currentProfile) {
+            // Get the job titles for enabled notifications
+            const enabledJobTitles = enabledJobs.map(([jobId, _]) => {
+              const job = jobs.find(j => j.id === jobId);
+              return job?.title || '';
+            }).filter(title => title);
+
+            // Update the preferred job role with the first enabled job
+            const updatedProfile: ProfileData = {
+              ...currentProfile,
+              preferredJobRole: enabledJobTitles[0] || currentProfile.preferredJobRole,
+              jobNotifications: true
+            };
+            
+            // Save the updated profile
+            await saveProfile(updatedProfile);
+            console.log('✅ Profile updated with job notifications for:', enabledJobTitles);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to update profile:', error);
+        // Don't prevent closing the popup if profile update fails
+      } finally {
+        setIsUpdatingProfile(false);
+      }
+    }
+    
+    onClose();
+  };
+
   return (
-    <PopupOverlay onClick={onClose}>
+    <PopupOverlay onClick={handleClose}>
       <PopupContainer onClick={(e) => e.stopPropagation()}>
         <PopupHeader>
           <Title>Job Recommendations</Title>
-          <CloseButton onClick={onClose}>×</CloseButton>
+          <CloseButton onClick={handleClose} disabled={isUpdatingProfile}>
+            {isUpdatingProfile ? '⏳' : '×'}
+          </CloseButton>
         </PopupHeader>
         
         <JobGrid>
           {jobs.map((job) => (
-            <JobCard key={job["Job Id"]}>
-              <TriASUContainer onClick={() => handleTriASUClick(job["User_fit"])}>
-                <TriASULogo src={triASU} alt="triASU" />
+            <JobCard key={job.id}>
+              <TriASUContainer onClick={() => handleTriASUClick(job.fit, job.id)}>
+                <TriASULogo 
+                  src={triASU} 
+                  alt="triASU" 
+                  $isClicked={clickedLogos.has(job.id)}
+                />
                 <InsightText>Click here to view insights!</InsightText>
               </TriASUContainer>
               
               <JobHeader>
-                <CompanyIcon>{getCompanyInitials(job["Employer Name"])}</CompanyIcon>
                 <JobInfo>
-                  <JobTitle>{job["Job Title"]}</JobTitle>
-                  <Company>{job["Employer Name"]}</Company>
+                  <JobTitle>{job.title}</JobTitle>
+                  <Company>{job.company}</Company>
                 </JobInfo>
+                <NotificationToggleContainer>
+                  <ToggleLabel>
+                    <ToggleInput
+                      type="checkbox"
+                      checked={jobNotifications[job.id] || false}
+                      onChange={(e) => handleJobToggleChange(job.id, e.target.checked)}
+                      disabled={isUpdatingProfile}
+                    />
+                    <ToggleSwitch $isOn={jobNotifications[job.id] || false} />
+                    <span>Notify me for similar roles</span>
+                  </ToggleLabel>
+                </NotificationToggleContainer>
               </JobHeader>
               
               <JobMeta>
-                <MetaItem>📍 {job["Location"]}</MetaItem>
-                <MetaItem>💰 {formatSalary(job["Salary Pay Lower Cap"], job["Salary Pay Upper Cap"])}</MetaItem>
-                <MetaItem>⏰ {job["Employment Type"]}</MetaItem>
+                <MetaItem>📍 {job.location}</MetaItem>
+                <MetaItem>💰 {formatSalary(job.salary_min, job.salary_max)}</MetaItem>
+                <MetaItem>⏰ {job.type}</MetaItem>
               </JobMeta>
 
-              <JobDescription>{job["Job Description"]}</JobDescription>
+              <JobDescription>{job.description}</JobDescription>
               
               <RequirementsContent>
                 <RequirementsTitle>Requirements:</RequirementsTitle>
                 <RequirementsList>
-                  <li>{job["Required Experience"] !== "Not specified" ? `Experience: ${job["Required Experience"]}` : "Experience requirements not specified"}</li>
-                  {job["Industry"] && <li>Industry: {job["Industry"]}</li>}
-                  <li>Employment Type: {job["Employment Type"]}</li>
+                  <li>{job.experience !== "Not specified" ? `Experience: ${job.experience}` : "Experience requirements not specified"}</li>
+                  {job.industry && <li>Industry: {job.industry}</li>}
+                  <li>Employment Type: {job.type}</li>
                 </RequirementsList>
               </RequirementsContent>
 
               <ButtonContainer>
-                <ApplyButton onClick={() => alert(`Applying to ${job["Job Title"]} at ${job["Employer Name"]}`)}>
+                <ApplyButton onClick={() => alert(`Applying to ${job.title} at ${job.company}`)}>
                   Apply Now
                 </ApplyButton>
-                <SaveButton onClick={() => alert(`Saved ${job["Job Title"]}`)}>
-                  Save Job
-                </SaveButton>
               </ButtonContainer>
             </JobCard>
           ))}
