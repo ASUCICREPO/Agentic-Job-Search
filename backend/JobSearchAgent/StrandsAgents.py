@@ -131,15 +131,22 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "• Memory tools: Access conversation history, previous job searches, and stored preferences (read-only)\n\n"
                 "SOURCE-BASED WORKFLOW:\n"
                 "• If source='livesearch': DO NOT save job recommendations - only return search results\n"
-                "• If source='batch': Save job recommendations using save_job_recommendations() after analysis\n\n"
+                "• If source='batch': DIRECTLY save job recommendations to DynamoDB using save_job_recommendations() and return ONLY success/failure message - DO NOTHING ELSE\n\n"
                 "ENHANCED WORKFLOW WITH USER PROFILE:\n"
-                "1) Use the enhanced query provided by orchestrator (includes user's skills, experience, preferences)\n"
-                "2) Search for relevant job opportunities using retrieve tool with personalized criteria (MAX 5 retrieve calls)\n"
-                "3) Extract detailed job information from search results\n"
-                "4) Analyze user profile information and match with job requirements to create User_fit explanation\n"
-                "5) Personalize job recommendations based on user's skills, experience level, and career goals\n"
-                "6) If source='batch': Save job recommendations using save_job_recommendations()\n"
-                "7) RETURN ONLY a valid JSON array in this exact format:\n\n"
+                "1) Check if user profile exists using get_student_profile()\n"
+                "2) DETECT QUERY TYPE:\n"
+                "   - If query is opt-in response ('Yes', 'No', 'I want notifications', etc.): Save preference using save_student_profile() and return confirmation message\n"
+                "   - If query is job search request: Continue with job search workflow\n"
+                "3) FOR JOB SEARCH: Use the enhanced query provided by orchestrator (includes user's skills, experience, preferences)\n"
+                "4) FOR JOB SEARCH: Search for relevant job opportunities using retrieve tool with personalized criteria (MAX 5 retrieve calls)\n"
+                "5) FOR JOB SEARCH: Extract detailed job information from search results\n"
+                "6) FOR JOB SEARCH: Analyze user profile information and match with job requirements to create User_fit explanation\n"
+                "7) FOR JOB SEARCH: Personalize job recommendations based on user's skills, experience level, and career goals\n"
+                "8) FOR JOB SEARCH: If source='batch': Save job recommendations using save_job_recommendations() and return ONLY success message\n"
+                "9) FOR JOB SEARCH: If source='livesearch': RETURN job results as JSON array\n"
+                "10) FOR JOB SEARCH (LIVESEARCH ONLY): AFTER returning job results, handle notification preferences:\n"
+                "    - If NO profile exists OR optInStatus=False: Ask 'Would you like daily notifications with job recommendations?' and save using save_student_profile()\n"
+                "    - If profile EXISTS and optInStatus=True: Skip notification question (user already opted in)\n\n"
                 "PERFORMANCE CONSTRAINTS:\n"
                 "• LIMIT retrieve tool calls to MAXIMUM 5 times per job search\n"
                 "• Prioritize quality over quantity of search results\n"
@@ -164,12 +171,15 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
                 "  }\n"
                 "]\n\n"
                 "CRITICAL RESPONSE CONSTRAINTS:\n"
-                "• RETURN ONLY the JSON array - ABSOLUTELY NO additional text, explanations, or introductions\n"
-                "• DO NOT include phrases like 'Based on the search results...', 'I'll now provide you with...', or any other text\n"
-                "• DO NOT add any introductory sentences or conclusions\n"
-                "• If no jobs found, return: []\n"
-                "• NO thinking, explanation, or markdown text before or after the JSON\n"
-                "• NO formatting outside the JSON structure\n"
+                "• FOR OPT-IN RESPONSES (step 2): Return plain text confirmation message only\n"
+                "• FOR JOB SEARCH source='batch': Save results using save_job_recommendations() and return ONLY success/failure message\n"
+                "• FOR JOB SEARCH source='livesearch' (steps 3-9): Return job results as JSON array first\n"
+                "• FOR JOB SEARCH source='livesearch' (step 10): If notification question needed, add it as plain text after the JSON\n"
+                "• For livesearch job results: RETURN ONLY the JSON array first\n"
+                "• For livesearch job results: ABSOLUTELY NO additional text, explanations, or introductions before JSON\n"
+                "• For livesearch job results: If no jobs found, return: []\n"
+                "• For livesearch job results: START with [ and END with ]\n"
+                "• For batch processing: Use save_job_recommendations() to save results and return minimal success message\n"
                 "• User_fit must explain why the user matches this job based on their profile\n"
                 "• Include all available salary information (use 'Not specified' if missing)\n"
                 "• Always use the exact field names shown above\n"
@@ -387,11 +397,33 @@ async def handle_agent_request(payload):
 
         enhanced_prompt = f"[Context: {' | '.join(context_parts)}]\n{prompt}"
 
+        # Check if source is "batch" - if so, directly call job_search_agent_tool
+        if source == "batch":
+            print(f"Batch processing detected - directly calling job search agent for user: {email}")
+            # Directly call job_search_agent_tool for batch processing
+            batch_result = job_search_agent_tool(
+                query=enhanced_prompt,
+                session_id=session_id,
+                email=email,
+                source=source
+            )
+
+            # Create memory event for the batch result
+            _create_memory_event("ASSISTANT", str(batch_result), session_id, email)
+
+            # Return the result directly
+            yield {"job_agent_result": str(batch_result)}
+            yield {"final_result": str(batch_result)}
+            return
+
         # Enhanced prompt is ready with session and email context
 
         # Stream the response from the orchestrator agent
         final_response = ""
         job_search_thinking_sent = False  # Flag to prevent duplicate thinking messages
+        carrier_advice_thinking_sent = False  # Flag to prevent duplicate thinking messages
+        job_search_started = False  # Track if job search was initiated
+        carrier_advice_started = False  # Track if career advice was initiated
 
         async for event in orchestrator_system.orchestrator_agent.stream_async(enhanced_prompt):
 
@@ -410,11 +442,17 @@ async def handle_agent_request(payload):
                                 final_response = content["text"]
                             elif "toolResult" in content:
                                 tool_result = content["toolResult"]
-                                # For job search results, yield them directly
-                                if "content" in tool_result:
+                                # Only send job_agent_result if job search was initiated
+                                if job_search_started and "content" in tool_result:
                                     for result_content in tool_result["content"]:
                                         if "text" in result_content:
                                             yield {"job_agent_result": result_content["text"]}
+                                            final_response = result_content["text"]
+                                # Only send carrier_advice_result if career advice was initiated
+                                elif carrier_advice_started and "content" in tool_result:
+                                    for result_content in tool_result["content"]:
+                                        if "text" in result_content:
+                                            yield {"carrier_advice_result": result_content["text"]}
                                             final_response = result_content["text"]
 
                 # Tool usage information - show the streaming tool input being built
@@ -425,7 +463,14 @@ async def handle_agent_request(payload):
                         if tool_info["name"] == "job_search_agent_tool" and not job_search_thinking_sent:
                             yield {"thinking": "🔍 Searching for relevant job opportunities based on your preferences..."}
                             yield {"job_search_started": True}
+                            job_search_started = True  # Track that job search was initiated
                             job_search_thinking_sent = True  # Set flag to prevent duplicate messages
+                        # Special thinking message for career advice agent (send only once)
+                        elif tool_info["name"] == "career_advice_agent_tool" and not carrier_advice_thinking_sent:
+                            yield {"thinking": "💼 Providing career guidance and advice..."}
+                            yield {"carrier_advice_started": True}
+                            carrier_advice_started = True  # Track that career advice was initiated
+                            carrier_advice_thinking_sent = True  # Set flag to prevent duplicate messages
 
                 # Error events
                 elif "error" in event:
