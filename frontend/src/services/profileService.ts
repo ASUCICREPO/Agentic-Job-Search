@@ -1,18 +1,3 @@
-// profileService.ts — Upload to S3 first (browser) → then call Lambdas
-// Uses AWS SDK v3 in the browser. Requires permanent AWS credentials available at build/runtime.
-// REQUIRED Env vars (CRA-style, no fallbacks):
-//   REACT_APP_AWS_REGION=...                   (AWS region)
-//   REACT_APP_AWS_ACCESS_KEY_ID=...           (permanent access key)
-//   REACT_APP_AWS_SECRET_ACCESS_KEY=...       (permanent secret key)
-//   REACT_APP_RESUME_BUCKET=...               (S3 bucket for resumes)
-//   REACT_APP_RESUME_PROCESSOR_URL=...        (Lambda URL for resume processing)
-//   REACT_APP_SAVE_PROFILE_URL=...            (Lambda URL for profile saving)
-//
-// Notes:
-// - Make sure your bucket CORS allows PUT from your frontend origin.
-// - The IAM principal for these creds must allow s3:PutObject on the bucket/key.
-// - We save under a collision-safe key at the bucket root: "<timestamp>-<originalName>".
-
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const REGION = process.env.REACT_APP_AWS_REGION;
@@ -34,8 +19,10 @@ export interface ProfileData {
   experience: string;
   email: string;
   phone: string;
-  interests: string;
+  preferredJobRole: string;
   linkedin: string;
+  optInStatus: boolean;
+  communicationMethod: string;
 }
 
 // ---------- helpers ----------
@@ -108,6 +95,13 @@ function toSchema(src: any): ProfileData {
     const v = src?.[k as string];
     return v == null || String(v).trim() === '' ? 'N/A' : String(v).trim();
   };
+
+  // Handle optInStatus specifically as boolean
+  const optInValue = src?.optInStatus;
+  const optInStatus = typeof optInValue === 'boolean' ? optInValue :
+                     typeof optInValue === 'string' ? optInValue.toLowerCase() === 'true' :
+                     false;
+
   return {
     fullName: get('fullName'),
     location: get('location'),
@@ -117,8 +111,10 @@ function toSchema(src: any): ProfileData {
     experience: get('experience'),
     email: get('email'),
     phone: get('phone'),
-    interests: get('interests'),
+    preferredJobRole: get('preferredJobRole'),
     linkedin: get('linkedin'),
+    optInStatus: optInStatus,
+    communicationMethod: get('communicationMethod'),
   };
 }
 
@@ -184,17 +180,75 @@ export const uploadResumeAndParse = async (file: File): Promise<ProfileData> => 
   }
 };
 
-// Save with EXACT schema
+// Convert UI format to backend format
+function toBackendFormat(profileData: ProfileData) {
+  const baseData = toSchema(profileData);
+
+  return {
+    ...baseData,
+    optInStatus: profileData.optInStatus, 
+  };
+}
+
+// Save with backend format
 export const saveProfile = async (profileData: ProfileData): Promise<void> => {
   try {
-    const schemaData = toSchema(profileData);
+    const backendData = toBackendFormat(profileData);
     const payload = {
-      parsed_data: schemaData
+      parsed_data: backendData
     };
 
     await postJson(SAVE_PROFILE_URL!, payload);
   } catch (error) {
     console.error('Profile save process failed:', error);
+    throw error;
+  }
+};
+
+// Convert backend format to UI format
+function fromBackendFormat(backendData: any): ProfileData {
+  const uiData = toSchema(backendData);
+
+  // Convert optInStatus from backend to UI format
+  uiData.optInStatus = Boolean(backendData.optInStatus);
+  uiData.communicationMethod = backendData.communicationMethod || '';
+
+  return uiData;
+}
+
+// Retrieve profile by email
+export const getProfile = async (email: string): Promise<ProfileData | null> => {
+  try {
+    const url = `${SAVE_PROFILE_URL}?email=${encodeURIComponent(email)}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const raw = await response.text();
+    let data: any = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (parseError) {
+      console.error('Failed to parse JSON response:', parseError);
+      throw new Error(`Non-JSON response from ${url}: ${raw}`);
+    }
+
+    if (!response.ok) {
+      const msg = data?.error || data?.message || raw || `HTTP ${response.status}`;
+      console.error('HTTP error response:', msg);
+      throw new Error(msg);
+    }
+
+    if (data.profile) {
+      return fromBackendFormat(data.profile);
+    } else {
+      return null; // Profile not found
+    }
+  } catch (error) {
+    console.error('Profile retrieval process failed:', error);
     throw error;
   }
 };
