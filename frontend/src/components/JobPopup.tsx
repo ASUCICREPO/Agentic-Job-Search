@@ -475,13 +475,28 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
                   return job?.title || '';
                 }).filter(title => title);
 
-                // Remove duplicates to prevent saving duplicated job titles
+                // Remove duplicates from enabled job titles first
                 const uniqueJobTitles = Array.from(new Set(enabledJobTitles));
 
-                // Update preferred job role with ALL enabled jobs (duplicates removed)
+                // Merge existing preferred job roles with new enabled jobs and deduplicate
+                let existingRoles: string[] = [];
+                if (currentProfile.preferredJobRole && currentProfile.preferredJobRole.trim()) {
+                  existingRoles = currentProfile.preferredJobRole.split(',').map(role => role.trim());
+                }
+
+                // Combine existing roles with new enabled job titles
+                const allRoles = [...existingRoles, ...uniqueJobTitles];
+
+                // Remove duplicates (case-insensitive)
+                const uniqueRoles = Array.from(new Set(
+                  allRoles.map(role => role.toLowerCase())
+                )).map(lowercaseRole =>
+                  allRoles.find(role => role.toLowerCase() === lowercaseRole) || lowercaseRole
+                );
+
                 const updatedProfile: ProfileData = {
                   ...currentProfile,
-                  preferredJobRole: uniqueJobTitles.length > 0 ? uniqueJobTitles.join(', ') : currentProfile.preferredJobRole,
+                  preferredJobRole: uniqueRoles.length > 0 ? uniqueRoles.join(', ') : currentProfile.preferredJobRole,
                   optInStatus: true
                 };
 
