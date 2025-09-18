@@ -47,15 +47,26 @@ const NotificationToggleContainer = styled.div`
   flex-shrink: 0;
 `;
 
-const ToggleLabel = styled.label`
+const ToggleLabel = styled.label<{ $isAutoChecked?: boolean }>`
   display: flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #333;
+  color: ${props => props.$isAutoChecked ? '#8B1538' : '#333'};
   font-weight: 500;
   white-space: nowrap;
+  position: relative;
+
+  &::after {
+    content: ${props => props.$isAutoChecked ? '"(Matches your preferred role)"' : '""'};
+    position: absolute;
+    top: -12px;
+    left: 0;
+    font-size: 0.6rem;
+    color: #8B1538;
+    font-weight: 400;
+  }
 `;
 
 const ToggleSwitch = styled.div<{ $isOn: boolean }>`
@@ -329,14 +340,94 @@ interface JobPopupProps {
 const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) => {
   const [selectedUserFit, setSelectedUserFit] = React.useState<string | null>(null);
   const [jobNotifications, setJobNotifications] = React.useState<{ [jobId: string]: boolean }>({});
-  const [isUpdatingProfile, setIsUpdatingProfile] = React.useState(false);
   const [clickedLogos, setClickedLogos] = React.useState<Set<string>>(new Set());
+  const [autoEnabledJobs, setAutoEnabledJobs] = React.useState<Set<string>>(new Set());
+  const [initialJobNotifications, setInitialJobNotifications] = React.useState<{ [jobId: string]: boolean }>({});
+
+  // Load user profile and auto-check notifications based on job title matches
+  React.useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        const userEmail = getUserEmail();
+        if (userEmail) {
+          const profile = await getProfile(userEmail);
+          if (profile && profile.preferredJobRole) {
+            const autoEnabledNotifications: { [jobId: string]: boolean } = {};
+            const autoEnabledJobIds = new Set<string>();
+
+            // Compare each job title with user's preferred role (exact match only)
+            jobs.forEach(job => {
+              if (isExactMatch(profile.preferredJobRole, job.title)) {
+                autoEnabledNotifications[job.id] = true;
+                autoEnabledJobIds.add(job.id);
+              }
+            });
+
+            if (Object.keys(autoEnabledNotifications).length > 0) {
+              setJobNotifications(autoEnabledNotifications);
+              setAutoEnabledJobs(autoEnabledJobIds);
+            }
+
+            // Save the initial state for comparison (whether auto-enabled or empty)
+            setInitialJobNotifications({...autoEnabledNotifications});
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load user profile:', error);
+      }
+    };
+
+    loadUserProfile();
+  }, [jobs]);
+
+  // Simple 1:1 matching - exact string match only
+  const isExactMatch = (preferred: string, jobTitle: string): boolean => {
+    // Convert both to lowercase for case-insensitive matching
+    const preferredLower = preferred.toLowerCase().trim();
+    const jobTitleLower = jobTitle.toLowerCase().trim();
+
+    // Check if the preferred role appears exactly in the job title
+    return jobTitleLower.includes(preferredLower);
+  };
+
+  // Check if job notifications have changed from initial state
+  const hasNotificationsChanged = (): boolean => {
+    const currentKeys = Object.keys(jobNotifications);
+    const initialKeys = Object.keys(initialJobNotifications);
+
+    // If different number of keys, something changed
+    if (currentKeys.length !== initialKeys.length) {
+      return true;
+    }
+
+    // Check if any notification state has changed
+    for (const jobId of currentKeys) {
+      if (jobNotifications[jobId] !== initialJobNotifications[jobId]) {
+        return true;
+      }
+    }
+
+    return false;
+  };
 
   const formatSalary = (lower: string, upper: string) => {
     if (lower === "Not specified" || upper === "Not specified") {
       return "Salary not specified";
     }
-    return `$${parseInt(lower).toLocaleString()}-$${parseInt(upper).toLocaleString()}/year`;
+
+    // Clean the salary values by removing $ and commas
+    const cleanLower = lower.replace(/[$,]/g, '');
+    const cleanUpper = upper.replace(/[$,]/g, '');
+
+    // Parse as integers and format
+    const lowerNum = parseInt(cleanLower);
+    const upperNum = parseInt(cleanUpper);
+
+    if (isNaN(lowerNum) || isNaN(upperNum)) {
+      return "Salary information unavailable";
+    }
+
+    return `$${lowerNum.toLocaleString()}-$${upperNum.toLocaleString()}/year`;
   };
 
   const handleTriASUClick = (fit: string | undefined, jobId: string) => {
@@ -351,46 +442,83 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
       ...prev,
       [jobId]: enabled
     }));
+
+    // If user manually disables an auto-enabled job, remove it from auto-enabled set
+    if (!enabled && autoEnabledJobs.has(jobId)) {
+      setAutoEnabledJobs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(jobId);
+        return newSet;
+      });
+    }
   };
 
   const handleClose = async () => {
-    // Check if any job notifications are enabled
-    const enabledJobs = Object.entries(jobNotifications).filter(([_, enabled]) => enabled);
-    
-    if (enabledJobs.length > 0) {
-      setIsUpdatingProfile(true);
-      try {
-        const userEmail = getUserEmail();
-        if (userEmail) {
-          // Get current profile data
-          const currentProfile = await getProfile(userEmail);
-          if (currentProfile) {
-            // Get the job titles for enabled notifications
-            const enabledJobTitles = enabledJobs.map(([jobId, _]) => {
-              const job = jobs.find(j => j.id === jobId);
-              return job?.title || '';
-            }).filter(title => title);
+    console.log('🔍 handleClose called');
+    console.log('🔍 hasNotificationsChanged():', hasNotificationsChanged());
+    console.log('🔍 jobNotifications:', jobNotifications);
+    console.log('🔍 initialJobNotifications:', initialJobNotifications);
 
-            // Update the preferred job role with the first enabled job
-            const updatedProfile: ProfileData = {
-              ...currentProfile,
-              preferredJobRole: enabledJobTitles[0] || currentProfile.preferredJobRole,
-              jobNotifications: true
-            };
-            
-            // Save the updated profile
-            await saveProfile(updatedProfile);
-            console.log('✅ Profile updated with job notifications for:', enabledJobTitles);
+    // Only save profile if user actually changed any notification settings
+    if (hasNotificationsChanged()) {
+      const enabledJobs = Object.entries(jobNotifications).filter(([_, enabled]) => enabled);
+      console.log('🔍 enabledJobs:', enabledJobs);
+
+      if (enabledJobs.length > 0) {
+        // Do this in background without blocking UI
+        (async () => {
+          try {
+            const userEmail = getUserEmail();
+            console.log('🔍 userEmail from cookie:', userEmail);
+
+            if (userEmail) {
+              console.log('🔍 Fetching current profile...');
+              // Get current profile data
+              const currentProfile = await getProfile(userEmail);
+              console.log('🔍 currentProfile:', currentProfile);
+
+              if (currentProfile) {
+                // Get the job titles for enabled notifications
+                const enabledJobTitles = enabledJobs.map(([jobId, _]) => {
+                  const job = jobs.find(j => j.id === jobId);
+                  return job?.title || '';
+                }).filter(title => title);
+
+                console.log('🔍 enabledJobTitles:', enabledJobTitles);
+
+                // Update preferred job role with ALL enabled jobs
+                const updatedProfile: ProfileData = {
+                  ...currentProfile,
+                  preferredJobRole: enabledJobTitles.length > 0 ? enabledJobTitles.join(', ') : currentProfile.preferredJobRole,
+                  optInStatus: true
+                };
+
+                console.log('🔍 updatedProfile:', updatedProfile);
+                console.log('🔍 preferredJobRole being sent:', updatedProfile.preferredJobRole);
+                console.log('🔍 Calling saveProfile...');
+
+                // Save the updated profile in background
+                await saveProfile(updatedProfile);
+                console.log('✅ Profile updated with job notifications for:', enabledJobTitles);
+              } else {
+                console.log('❌ No current profile found');
+              }
+            } else {
+              console.log('❌ No user email found in cookie');
+            }
+          } catch (error) {
+            console.error('❌ Failed to update profile:', error);
+            // Profile update failed, but user doesn't need to know
           }
-        }
-      } catch (error) {
-        console.error('❌ Failed to update profile:', error);
-        // Don't prevent closing the popup if profile update fails
-      } finally {
-        setIsUpdatingProfile(false);
+        })();
+      } else {
+        console.log('❌ No enabled jobs found');
       }
+    } else {
+      console.log('ℹ️ No notification changes detected, skipping profile update');
     }
-    
+
+    // Close immediately without waiting
     onClose();
   };
 
@@ -399,8 +527,8 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
       <PopupContainer onClick={(e) => e.stopPropagation()}>
         <PopupHeader>
           <Title>Job Recommendations</Title>
-          <CloseButton onClick={handleClose} disabled={isUpdatingProfile}>
-            {isUpdatingProfile ? '⏳' : '×'}
+          <CloseButton onClick={handleClose}>
+            ×
           </CloseButton>
         </PopupHeader>
         
@@ -422,12 +550,11 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
                   <Company>{job.company}</Company>
                 </JobInfo>
                 <NotificationToggleContainer>
-                  <ToggleLabel>
+                  <ToggleLabel $isAutoChecked={autoEnabledJobs.has(job.id) && jobNotifications[job.id]}>
                     <ToggleInput
                       type="checkbox"
                       checked={jobNotifications[job.id] || false}
                       onChange={(e) => handleJobToggleChange(job.id, e.target.checked)}
-                      disabled={isUpdatingProfile}
                     />
                     <ToggleSwitch $isOn={jobNotifications[job.id] || false} />
                     <span>Notify me for similar roles</span>

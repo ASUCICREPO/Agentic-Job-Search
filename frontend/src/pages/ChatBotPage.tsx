@@ -361,7 +361,6 @@ const ChatBotPage: React.FC = () => {
     const [showJobPopup, setShowJobPopup] = useState(false);
     const [jobs, setJobs] = useState<Job[]>([]);
     const chatAreaRef = useRef<HTMLDivElement>(null);
-    const currentBotMessageRef = useRef<Message | null>(null);
 
     useEffect(() => {
         if (chatAreaRef.current) {
@@ -391,9 +390,6 @@ const ChatBotPage: React.FC = () => {
     const handleProfileClick = () => {
         navigate('/', { state: { fromChatbot: true, userName: userName } });
     };
-
-
-
 
     const handleViewJobs = () => {
         setShowJobPopup(true);
@@ -450,19 +446,17 @@ const ChatBotPage: React.FC = () => {
                 
                 onJobSearchStarted: () => {
                     console.log('Job search started');
-                    setIsTyping(false);
-                    setIsSpecialTyping(true);
+                    // Keep regular typing indicator until results arrive
                 },
                 
                 onCareerAdviceStarted: () => {
                     console.log('Career advice started');
-                    setIsTyping(false);
-                    setIsSpecialTyping(true);
+                    // Keep regular typing indicator until advice arrives
                 },
                 
                 onJobResults: (jobs: Job[], responseText: string) => {
                     console.log('Job results received:', jobs);
-                    setIsSpecialTyping(false);
+                    setIsTyping(false);
                     
                     if (jobs && jobs.length > 0) {
                         setJobs(jobs);
@@ -489,7 +483,7 @@ const ChatBotPage: React.FC = () => {
                 
                 onCareerAdvice: (advice: string) => {
                     console.log('Career advice received');
-                    setIsSpecialTyping(false);
+                    setIsTyping(false);
                     
                     const botMessage: Message = {
                         id: Date.now() + Math.random(),
@@ -502,26 +496,21 @@ const ChatBotPage: React.FC = () => {
                 },
                 
                 onResponse: (response: string) => {
-                    if (!currentBotMessageRef.current) {
-                        currentBotMessageRef.current = {
-                            id: Date.now() + Math.random(),
-                            text: response,
-                            isUser: false,
-                            timestamp: new Date()
-                        };
-                        setMessages(prev => [...prev, currentBotMessageRef.current!]);
-                    } else {
-                        // Update existing message
-                        setMessages(prev => prev.map(msg => 
-                            msg.id === currentBotMessageRef.current!.id 
-                                ? { ...msg, text: response }
-                                : msg
-                        ));
-                    }
+                    // Turn off typing indicator when first response chunk arrives
+                    setIsTyping(false);
+                    // Create a new bot message for each response chunk
+                    const botMessage: Message = {
+                        id: Date.now() + Math.random(),
+                        text: response,
+                        isUser: false,
+                        timestamp: new Date()
+                    };
+                    setMessages(prev => [...prev, botMessage]);
                 },
                 
                 onError: (error: string) => {
                     console.error('Agent error:', error);
+                    setIsTyping(false);
                     // Only show error message if it's not a generic processing error
                     if (!error.includes("Error processing request: 'output'")) {
                         const errorMessage: Message = {
@@ -574,7 +563,7 @@ const ChatBotPage: React.FC = () => {
                     </WelcomeSection>
                 </LeftSection>
                 <ProfileButton onClick={handleProfileClick}>
-                    👤 Edit Profile
+                    👤 Profile
                 </ProfileButton>
             </Header>
 

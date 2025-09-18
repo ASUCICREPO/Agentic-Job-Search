@@ -51,6 +51,8 @@ export async function invokeAgent(
     // Use persistent session ID for consistency across interactions
     const runtimeSessionId = getOrCreateSessionId();
 
+    console.log("using runtimeId" + runtimeSessionId)
+
     // Get user email if available
     const userEmail = getUserEmail();
 
@@ -74,86 +76,108 @@ export async function invokeAgent(
 
     const command = new InvokeAgentRuntimeCommand(input);
     const response = await client.send(command);
-    
+
     // Handle streaming response
     if (response.response) {
       try {
-        const textResponse = await response.response.transformToString();
-        console.log('Raw agent response:', textResponse);
-        
-        // Parse the streaming response
-        const lines = textResponse.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.substring(6));
-              
-              // Handle thinking process
-              if (data.thinking && callbacks?.onThinking) {
-                callbacks.onThinking(data.thinking);
-              }
-              
-              // Handle job search started
-              if (data.job_search_started === true && callbacks?.onJobSearchStarted) {
-                callbacks.onJobSearchStarted();
-              }
-              
-              // Handle career advice started
-              if (data.carrier_advice_started === true && callbacks?.onCareerAdviceStarted) {
-                callbacks.onCareerAdviceStarted();
-              }
-              
-              // Handle job results
-              if (data.job_agent_result && callbacks?.onJobResults) {
+        // Process the streaming response incrementally
+        let buffer = '';
+        let hasReceivedStreamingResponse = false;
+
+        // Use the streaming response body
+        const stream = response.response.transformToWebStream();
+        const reader = stream.getReader();
+        const decoder = new TextDecoder();
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // Decode the chunk and add to buffer
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+
+            // Process complete lines from the buffer
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
                 try {
-                  let jobData: any[] = [];
-                  let cleanJobResult = data.job_agent_result.trim();
-                  
-                  // Find the JSON array in the string
-                  const jsonMatch = cleanJobResult.match(/(\[[\s\S]*?\])/);
-                  if (jsonMatch) {
-                    cleanJobResult = jsonMatch[1];
+                  const data = JSON.parse(line.substring(6));
+
+                  // Handle thinking process
+                  if (data.thinking && callbacks?.onThinking) {
+                    callbacks.onThinking(data.thinking);
                   }
-                  
-                  jobData = JSON.parse(cleanJobResult);
-                  callbacks.onJobResults(jobData, data.response || "Here are your job recommendations:");
+
+                  // Handle job search started
+                  if (data.job_search_started === true && callbacks?.onJobSearchStarted) {
+                    callbacks.onJobSearchStarted();
+                  }
+
+                  // Handle career advice started
+                  if (data.carrier_advice_started === true && callbacks?.onCareerAdviceStarted) {
+                    callbacks.onCareerAdviceStarted();
+                  }
+
+                  // Handle job results
+                  if (data.job_agent_result && callbacks?.onJobResults) {
+                    try {
+                      let jobData: any[] = [];
+                      let cleanJobResult = data.job_agent_result.trim();
+
+                      // Find the JSON array in the string
+                      const jsonMatch = cleanJobResult.match(/(\[[\s\S]*?\])/);
+                      if (jsonMatch) {
+                        cleanJobResult = jsonMatch[1];
+                      }
+
+                      jobData = JSON.parse(cleanJobResult);
+                      callbacks.onJobResults(jobData, data.response || "Here are your job recommendations:");
+                    } catch (error) {
+                      console.error('Error parsing job data:', error);
+                      if (callbacks?.onError) {
+                        callbacks.onError("Sorry, I'm having trouble processing the job results. Please try again later.");
+                      }
+                    }
+                  }
+
+                  // Handle career advice results
+                  if (data.carrier_advice_result && callbacks?.onCareerAdvice) {
+                    callbacks.onCareerAdvice(data.carrier_advice_result);
+                  }
+
+                  // Handle regular response
+                  if (data.response && callbacks?.onResponse) {
+                    hasReceivedStreamingResponse = true;
+                    callbacks.onResponse(data.response);
+                  }
+
+                  // Handle final result (only if no streaming response was received)
+                  if (data.final_result && !hasReceivedStreamingResponse && callbacks?.onResponse) {
+                    callbacks.onResponse(data.final_result);
+                  }
+
+                  // Handle errors
+                  if (data.error && callbacks?.onError) {
+                    callbacks.onError(data.error);
+                  }
+
                 } catch (error) {
-                  console.error('Error parsing job data:', error);
-                  if (callbacks?.onError) {
-                    callbacks.onError("Sorry, I'm having trouble processing the job results. Please try again later.");
-                  }
+                  console.log('Error parsing streaming data:', error);
                 }
               }
-              
-              // Handle career advice results
-              if (data.carrier_advice_result && callbacks?.onCareerAdvice) {
-                callbacks.onCareerAdvice(data.carrier_advice_result);
-              }
-              
-              // Handle regular response
-              if (data.response && callbacks?.onResponse) {
-                callbacks.onResponse(data.response);
-              }
-              
-              // Handle final result
-              if (data.final_result && callbacks?.onResponse) {
-                callbacks.onResponse(data.final_result);
-              }
-              
-              // Handle errors
-              if (data.error && callbacks?.onError) {
-                callbacks.onError(data.error);
-              }
-              
-            } catch (error) {
-              console.log('Error parsing streaming data:', error);
             }
           }
+        } finally {
+          reader.releaseLock();
         }
       } catch (error) {
-        console.error('Error processing response:', error);
+        console.error('Error processing streaming response:', error);
         if (callbacks?.onError) {
-          callbacks.onError('Error processing response');
+          callbacks.onError('Error processing streaming response');
         }
       }
     }
