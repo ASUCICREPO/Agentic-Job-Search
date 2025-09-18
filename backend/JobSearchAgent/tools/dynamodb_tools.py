@@ -100,7 +100,7 @@ def get_student_profile(email: str = "", get_all_opted_in: bool = False) -> Dict
 
         # Query for existing records with sanitized actor_id
         response = table.scan(
-            FilterExpression=boto3.dynamodb.conditions.Key('actionID').eq(sanitized_actor_id)
+            FilterExpression=boto3.dynamodb.conditions.Attr('actionID').eq(sanitized_actor_id)
         )
 
         items = response.get('Items', [])
@@ -122,7 +122,7 @@ def get_student_profile(email: str = "", get_all_opted_in: bool = False) -> Dict
         return {
             "exists": True,
             "email": stored_email,
-            "opt_in_status": opt_in_status,
+            "optInStatus": opt_in_status,
             "notification_method": notification_method,
             "message": "Student profile found"
         }
@@ -182,7 +182,7 @@ def save_student_profile(email: str, opt_in_status: bool, notification_method: s
         if update_existing:
             # Check for existing records with sanitized actor_id
             response = table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Key('actionID').eq(sanitized_actor_id)
+                FilterExpression=boto3.dynamodb.conditions.Attr('actionID').eq(sanitized_actor_id)
             )
 
             if response.get('Items', []):
