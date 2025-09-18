@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import ReactMarkdown from 'react-markdown';
 import { ASULogoImage, UserAvatarImage, BotAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
 import JobPopup from '../components/JobPopup';
@@ -308,20 +307,6 @@ const ViewJobsButton = styled.button`
   }
 `;
 
-const CareerAdviceContainer = styled.div`
-  margin-top: 12px;
-  padding: 16px;
-  background: linear-gradient(135deg, #FFF9C4 0%, #FFC627 100%);
-  border-radius: 8px;
-  border-left: 4px solid #8B1538;
-`;
-
-const CareerAdviceTitle = styled.h3`
-  color: #8B1538;
-  font-size: 1.1rem;
-  margin: 0 0 12px 0;
-  font-weight: 600;
-`;
 
 
 interface Message {
@@ -331,7 +316,6 @@ interface Message {
     timestamp: Date;
     hasJobButton?: boolean;
     jobQuery?: string;
-    isCareerAdvice?: boolean;
 }
 
 interface Job {
@@ -399,30 +383,6 @@ const ChatBotPage: React.FC = () => {
     };
 
 
-    const formatCareerAdvice = (text: string) => {
-        return (
-            <CareerAdviceContainer>
-                <CareerAdviceTitle>Career Guidance</CareerAdviceTitle>
-                <div style={{ lineHeight: '1.6' }}>
-                    <ReactMarkdown
-                        components={{
-                            h1: ({children}) => <h3 style={{color: '#8B1538', margin: '16px 0 8px 0', fontSize: '1.2rem'}}>{children}</h3>,
-                            h2: ({children}) => <h4 style={{color: '#8B1538', margin: '14px 0 6px 0', fontSize: '1.1rem'}}>{children}</h4>,
-                            h3: ({children}) => <h5 style={{color: '#8B1538', margin: '12px 0 4px 0', fontSize: '1rem'}}>{children}</h5>,
-                            p: ({children}) => <p style={{margin: '8px 0', color: '#333'}}>{children}</p>,
-                            ul: ({children}) => <ul style={{margin: '8px 0', paddingLeft: '20px'}}>{children}</ul>,
-                            ol: ({children}) => <ol style={{margin: '8px 0', paddingLeft: '20px'}}>{children}</ol>,
-                            li: ({children}) => <li style={{margin: '4px 0', color: '#555'}}>{children}</li>,
-                            strong: ({children}) => <strong style={{color: '#8B1538', fontWeight: '600'}}>{children}</strong>,
-                            em: ({children}) => <em style={{color: '#666', fontStyle: 'italic'}}>{children}</em>
-                        }}
-                    >
-                        {text}
-                    </ReactMarkdown>
-                </div>
-            </CareerAdviceContainer>
-        );
-    };
 
     const handleSendMessage = async () => {
         if (!inputValue.trim()) return;
@@ -454,19 +414,18 @@ const ChatBotPage: React.FC = () => {
         try {
             await invokeAgent(currentInput, {
                 onThinking: (thinking: string) => {
-                    console.log('Agent thinking:', thinking);
+                    // Agent thinking - no logging needed
                 },
 
                 onJobSearchStarted: () => {
-                    console.log('Job search started');
+                    // Job search started - no logging needed
                 },
 
                 onCareerAdviceStarted: () => {
-                    console.log('Career advice started');
+                    // Career advice started - no logging needed
                 },
 
                 onJobResults: (jobs: Job[], responseText: string) => {
-                    console.log('Job results received:', jobs);
                     setIsTyping(false);
                     hasJobResults = true;
 
@@ -531,7 +490,6 @@ const ChatBotPage: React.FC = () => {
                 },
 
                 onCareerAdvice: (advice: string) => {
-                    console.log('Career advice received');
                     setIsTyping(false);
                     hasCareerAdvice = true;
 
@@ -548,8 +506,7 @@ const ChatBotPage: React.FC = () => {
                                 msg.id === streamingMessageId
                                     ? {
                                         ...msg,
-                                        text: advice,
-                                        isCareerAdvice: true
+                                        text: advice
                                     }
                                     : msg
                             )
@@ -560,8 +517,7 @@ const ChatBotPage: React.FC = () => {
                             id: Date.now() + Math.random(),
                             text: advice,
                             isUser: false,
-                            timestamp: new Date(),
-                            isCareerAdvice: true
+                            timestamp: new Date()
                         };
                         setMessages(prev => [...prev, botMessage]);
                     }
@@ -627,7 +583,7 @@ const ChatBotPage: React.FC = () => {
                         };
                         setMessages(prev => [...prev, errorMessage]);
                     } else if (!error.includes("Error processing request: 'output'")) {
-                        console.log('Ignoring backend processing error - job results already received');
+                        // Ignoring backend processing error - job results already received
                     }
                 }
             });
@@ -699,7 +655,7 @@ const ChatBotPage: React.FC = () => {
                                     <BotAvatarImage />
                                     <BotContentWrapper>
                                         <BotMessageBubble style={{ whiteSpace: 'pre-line' }}>
-                                            {message.isCareerAdvice ? formatCareerAdvice(message.text) : message.text}
+                                            {message.text}
                                             {message.id === currentlyStreamingMessageId && (
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '8px' }}>
                                                     <TypingDot />
