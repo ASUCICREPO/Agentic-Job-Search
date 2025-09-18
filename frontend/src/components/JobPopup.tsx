@@ -454,28 +454,19 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
   };
 
   const handleClose = async () => {
-    console.log('🔍 handleClose called');
-    console.log('🔍 hasNotificationsChanged():', hasNotificationsChanged());
-    console.log('🔍 jobNotifications:', jobNotifications);
-    console.log('🔍 initialJobNotifications:', initialJobNotifications);
-
     // Only save profile if user actually changed any notification settings
     if (hasNotificationsChanged()) {
       const enabledJobs = Object.entries(jobNotifications).filter(([_, enabled]) => enabled);
-      console.log('🔍 enabledJobs:', enabledJobs);
 
       if (enabledJobs.length > 0) {
         // Do this in background without blocking UI
         (async () => {
           try {
             const userEmail = getUserEmail();
-            console.log('🔍 userEmail from cookie:', userEmail);
 
             if (userEmail) {
-              console.log('🔍 Fetching current profile...');
               // Get current profile data
               const currentProfile = await getProfile(userEmail);
-              console.log('🔍 currentProfile:', currentProfile);
 
               if (currentProfile) {
                 // Get the job titles for enabled notifications
@@ -487,9 +478,6 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
                 // Remove duplicates to prevent saving duplicated job titles
                 const uniqueJobTitles = Array.from(new Set(enabledJobTitles));
 
-                console.log('🔍 enabledJobTitles:', enabledJobTitles);
-                console.log('🔍 uniqueJobTitles:', uniqueJobTitles);
-
                 // Update preferred job role with ALL enabled jobs (duplicates removed)
                 const updatedProfile: ProfileData = {
                   ...currentProfile,
@@ -497,29 +485,15 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
                   optInStatus: true
                 };
 
-                console.log('🔍 updatedProfile:', updatedProfile);
-                console.log('🔍 preferredJobRole being sent:', updatedProfile.preferredJobRole);
-                console.log('🔍 Calling saveProfile...');
-
                 // Save the updated profile in background
                 await saveProfile(updatedProfile);
-                console.log('✅ Profile updated with job notifications for:', uniqueJobTitles);
-              } else {
-                console.log('❌ No current profile found');
               }
-            } else {
-              console.log('❌ No user email found in cookie');
             }
           } catch (error) {
-            console.error('❌ Failed to update profile:', error);
             // Profile update failed, but user doesn't need to know
           }
         })();
-      } else {
-        console.log('❌ No enabled jobs found');
       }
-    } else {
-      console.log('ℹ️ No notification changes detected, skipping profile update');
     }
 
     // Close immediately without waiting
