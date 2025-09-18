@@ -497,7 +497,7 @@ const ProfilePage: React.FC = () => {
     phone: "",
     preferredJobRole: "",
     linkedin: "",
-    jobNotifications: false,
+    optInStatus: false,
     communicationMethod: ""
   });
 
@@ -554,10 +554,10 @@ const ProfilePage: React.FC = () => {
       errors.push("Phone Number is required");
     }
 
-    // Communication method validation when notifications are enabled
-    if (formData.jobNotifications === true) {
+    // Communication method validation when opt-in is enabled
+    if (formData.optInStatus === true) {
       if (!hasValidCommunicationMethod()) {
-        errors.push("At least one communication method must be selected when job notifications are enabled");
+        errors.push("At least one communication method must be selected when opt-in is enabled");
       }
     }
 
@@ -756,9 +756,9 @@ const ProfilePage: React.FC = () => {
                       id="notifications-yes"
                       name="jobNotifications"
                       value="true"
-                      checked={formData.jobNotifications === true}
+                      checked={formData.optInStatus === true}
                       onChange={(e) => {
-                        setFormData(prev => ({ ...prev, jobNotifications: true }));
+                        setFormData(prev => ({ ...prev, optInStatus: true }));
                         // Clear validation errors when changing notification preference
                         if (validationErrors.length > 0) {
                           setValidationErrors([]);
@@ -774,11 +774,11 @@ const ProfilePage: React.FC = () => {
                       id="notifications-no"
                       name="jobNotifications"
                       value="false"
-                      checked={formData.jobNotifications === false}
+                      checked={formData.optInStatus === false}
                       onChange={(e) => {
                         setFormData(prev => ({
                           ...prev,
-                          jobNotifications: false,
+                          optInStatus: false,
                           communicationMethod: ''
                         }));
                         // Clear validation errors when changing notification preference
@@ -792,9 +792,9 @@ const ProfilePage: React.FC = () => {
                   </RadioOption>
                 </RadioGroup>
 
-                <CommunicationSection $show={formData.jobNotifications === true}>
+                <CommunicationSection $show={formData.optInStatus === true}>
                   <CommunicationTitle>Preferred Communication Method *</CommunicationTitle>
-                  {formData.jobNotifications === true && !hasValidCommunicationMethod() && (
+                  {formData.optInStatus === true && !hasValidCommunicationMethod() && (
                     <div style={{ color: '#d32f2f', fontSize: '12px', marginBottom: '8px' }}>
                       Please select at least one communication method to receive notifications.
                     </div>
@@ -862,7 +862,7 @@ const ProfilePage: React.FC = () => {
               </ValidationErrors>
             )}
 
-            <Proceed onClick={handleSaveProfile} disabled={isUploading || isSaving || isLoadingProfile || validationErrors.length > 0 || (formData.jobNotifications === true && !hasValidCommunicationMethod())}>
+            <Proceed onClick={handleSaveProfile} disabled={isUploading || isSaving || isLoadingProfile || validationErrors.length > 0 || (formData.optInStatus === true && !hasValidCommunicationMethod())}>
               {isSaving ? '💾 Saving Profile...' : 'Proceed to Job Search'}
             </Proceed>
           </NotificationAndButtonContainer>

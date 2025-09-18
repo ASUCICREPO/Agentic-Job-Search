@@ -1,18 +1,3 @@
-// profileService.ts — Upload to S3 first (browser) → then call Lambdas
-// Uses AWS SDK v3 in the browser. Requires permanent AWS credentials available at build/runtime.
-// REQUIRED Env vars (CRA-style, no fallbacks):
-//   REACT_APP_AWS_REGION=...                   (AWS region)
-//   REACT_APP_AWS_ACCESS_KEY_ID=...           (permanent access key)
-//   REACT_APP_AWS_SECRET_ACCESS_KEY=...       (permanent secret key)
-//   REACT_APP_RESUME_BUCKET=...               (S3 bucket for resumes)
-//   REACT_APP_RESUME_PROCESSOR_URL=...        (Lambda URL for resume processing)
-//   REACT_APP_SAVE_PROFILE_URL=...            (Lambda URL for profile saving)
-//
-// Notes:
-// - Make sure your bucket CORS allows PUT from your frontend origin.
-// - The IAM principal for these creds must allow s3:PutObject on the bucket/key.
-// - We save under a collision-safe key at the bucket root: "<timestamp>-<originalName>".
-
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const REGION = process.env.REACT_APP_AWS_REGION;
@@ -36,7 +21,7 @@ export interface ProfileData {
   phone: string;
   preferredJobRole: string;
   linkedin: string;
-  jobNotifications: boolean;
+  optInStatus: boolean;
   communicationMethod: string;
 }
 
@@ -110,6 +95,13 @@ function toSchema(src: any): ProfileData {
     const v = src?.[k as string];
     return v == null || String(v).trim() === '' ? 'N/A' : String(v).trim();
   };
+
+  // Handle optInStatus specifically as boolean
+  const optInValue = src?.optInStatus;
+  const optInStatus = typeof optInValue === 'boolean' ? optInValue :
+                     typeof optInValue === 'string' ? optInValue.toLowerCase() === 'true' :
+                     false;
+
   return {
     fullName: get('fullName'),
     location: get('location'),
@@ -121,7 +113,7 @@ function toSchema(src: any): ProfileData {
     phone: get('phone'),
     preferredJobRole: get('preferredJobRole'),
     linkedin: get('linkedin'),
-    jobNotifications: false, // Will be overridden by conversion logic
+    optInStatus: optInStatus,
     communicationMethod: get('communicationMethod'),
   };
 }
@@ -192,23 +184,9 @@ export const uploadResumeAndParse = async (file: File): Promise<ProfileData> => 
 function toBackendFormat(profileData: ProfileData) {
   const baseData = toSchema(profileData);
 
-  // Convert jobNotifications + communicationMethod to optinStatus
-  let optinStatus = '';
-  if (baseData.jobNotifications) {
-    const methods = (baseData.communicationMethod || '').split(',').filter(m => m.trim());
-    if (methods.includes('email') && methods.includes('phone')) {
-      optinStatus = 'both';
-    } else if (methods.includes('email')) {
-      optinStatus = 'email';
-    } else if (methods.includes('phone')) {
-      optinStatus = 'phone';
-    }
-  }
-
   return {
     ...baseData,
-    optinStatus,
-    jobNotifications: undefined, // Remove the old field
+    optInStatus: profileData.optInStatus, 
   };
 }
 
@@ -231,21 +209,9 @@ export const saveProfile = async (profileData: ProfileData): Promise<void> => {
 function fromBackendFormat(backendData: any): ProfileData {
   const uiData = toSchema(backendData);
 
-  // Convert optinStatus to jobNotifications + communicationMethod
-  const optinStatus = backendData.optinStatus || '';
-  if (optinStatus === 'email') {
-    uiData.jobNotifications = true;
-    uiData.communicationMethod = 'email';
-  } else if (optinStatus === 'phone') {
-    uiData.jobNotifications = true;
-    uiData.communicationMethod = 'phone';
-  } else if (optinStatus === 'both') {
-    uiData.jobNotifications = true;
-    uiData.communicationMethod = 'email,phone';
-  } else {
-    uiData.jobNotifications = false;
-    uiData.communicationMethod = '';
-  }
+  // Convert optInStatus from backend to UI format
+  uiData.optInStatus = Boolean(backendData.optInStatus);
+  uiData.communicationMethod = backendData.communicationMethod || '';
 
   return uiData;
 }
