@@ -355,9 +355,18 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
             const autoEnabledNotifications: { [jobId: string]: boolean } = {};
             const autoEnabledJobIds = new Set<string>();
 
-            // Compare each job title with user's preferred role (exact match only)
+            // Split preferred roles by comma and compare each individually
+            const preferredRoles = profile.preferredJobRole.split(',').map(role => role.trim());
+
             jobs.forEach(job => {
-              if (isExactMatch(profile.preferredJobRole, job.title)) {
+              // Check if any of the preferred roles match this job title
+              const hasMatch = preferredRoles.some(role => {
+                const roleLower = role.toLowerCase();
+                const titleLower = job.title.toLowerCase();
+                return titleLower.includes(roleLower) || roleLower.includes(titleLower);
+              });
+
+              if (hasMatch) {
                 autoEnabledNotifications[job.id] = true;
                 autoEnabledJobIds.add(job.id);
               }
@@ -380,15 +389,6 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
     loadUserProfile();
   }, [jobs]);
 
-  // Simple 1:1 matching - exact string match only
-  const isExactMatch = (preferred: string, jobTitle: string): boolean => {
-    // Convert both to lowercase for case-insensitive matching
-    const preferredLower = preferred.toLowerCase().trim();
-    const jobTitleLower = jobTitle.toLowerCase().trim();
-
-    // Check if the preferred role appears exactly in the job title
-    return jobTitleLower.includes(preferredLower);
-  };
 
   // Check if job notifications have changed from initial state
   const hasNotificationsChanged = (): boolean => {
@@ -484,12 +484,16 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
                   return job?.title || '';
                 }).filter(title => title);
 
-                console.log('🔍 enabledJobTitles:', enabledJobTitles);
+                // Remove duplicates to prevent saving duplicated job titles
+                const uniqueJobTitles = Array.from(new Set(enabledJobTitles));
 
-                // Update preferred job role with ALL enabled jobs
+                console.log('🔍 enabledJobTitles:', enabledJobTitles);
+                console.log('🔍 uniqueJobTitles:', uniqueJobTitles);
+
+                // Update preferred job role with ALL enabled jobs (duplicates removed)
                 const updatedProfile: ProfileData = {
                   ...currentProfile,
-                  preferredJobRole: enabledJobTitles.length > 0 ? enabledJobTitles.join(', ') : currentProfile.preferredJobRole,
+                  preferredJobRole: uniqueJobTitles.length > 0 ? uniqueJobTitles.join(', ') : currentProfile.preferredJobRole,
                   optInStatus: true
                 };
 
@@ -499,7 +503,7 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
 
                 // Save the updated profile in background
                 await saveProfile(updatedProfile);
-                console.log('✅ Profile updated with job notifications for:', enabledJobTitles);
+                console.log('✅ Profile updated with job notifications for:', uniqueJobTitles);
               } else {
                 console.log('❌ No current profile found');
               }

@@ -263,15 +263,16 @@ const TypingDot = styled.div`
   border-radius: 50%;
   background: #333;
   animation: typing 1.4s infinite ease-in-out;
-  
+
   &:nth-child(1) { animation-delay: -0.32s; }
   &:nth-child(2) { animation-delay: -0.16s; }
-  
+
   @keyframes typing {
     0%, 80%, 100% { transform: scale(0); }
     40% { transform: scale(1); }
   }
 `;
+
 
 const SpecialTypingIndicator = styled.div`
   display: flex;
@@ -358,6 +359,8 @@ const ChatBotPage: React.FC = () => {
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isSpecialTyping, setIsSpecialTyping] = useState(false);
+    const [isProcessingComplete, setIsProcessingComplete] = useState(true);
+    const [currentlyStreamingMessageId, setCurrentlyStreamingMessageId] = useState<number | null>(null);
     const [showJobPopup, setShowJobPopup] = useState(false);
     const [jobs, setJobs] = useState<Job[]>([]);
     const chatAreaRef = useRef<HTMLDivElement>(null);
@@ -434,85 +437,188 @@ const ChatBotPage: React.FC = () => {
         setMessages(prev => [...prev, userMessage]);
         const currentInput = inputValue;
         setInputValue('');
-        
+
+        // Mark processing as started
+        setIsProcessingComplete(false);
+
         // Show regular typing indicator initially
         setIsTyping(true);
+
+        // Track streaming response accumulation
+        let streamingResponse = '';
+        let streamingMessageId: number | null = null;
+        let hasJobResults = false;
+        let hasCareerAdvice = false;
+        let streamingTimeout: NodeJS.Timeout | null = null;
 
         try {
             await invokeAgent(currentInput, {
                 onThinking: (thinking: string) => {
                     console.log('Agent thinking:', thinking);
                 },
-                
+
                 onJobSearchStarted: () => {
                     console.log('Job search started');
-                    // Keep regular typing indicator until results arrive
                 },
-                
+
                 onCareerAdviceStarted: () => {
                     console.log('Career advice started');
-                    // Keep regular typing indicator until advice arrives
                 },
-                
+
                 onJobResults: (jobs: Job[], responseText: string) => {
                     console.log('Job results received:', jobs);
                     setIsTyping(false);
-                    
+                    hasJobResults = true;
+
+                    // Clear any pending streaming timeout
+                    if (streamingTimeout) {
+                        clearTimeout(streamingTimeout);
+                        streamingTimeout = null;
+                    }
+
                     if (jobs && jobs.length > 0) {
                         setJobs(jobs);
-                        
-                        const botMessage: Message = {
-                            id: Date.now() + Math.random(),
-                            text: responseText,
-                            isUser: false,
-                            timestamp: new Date(),
-                            hasJobButton: true,
-                            jobQuery: currentInput
-                        };
-                        setMessages(prev => [...prev, botMessage]);
+
+                        // Update the existing streaming message with job results
+                        if (streamingMessageId) {
+                            setMessages(prev =>
+                                prev.map(msg =>
+                                    msg.id === streamingMessageId
+                                        ? {
+                                            ...msg,
+                                            text: responseText,
+                                            hasJobButton: true,
+                                            jobQuery: currentInput
+                                        }
+                                        : msg
+                                )
+                            );
+                        } else {
+                            // Fallback: create new message if no streaming message exists
+                            const botMessage: Message = {
+                                id: Date.now() + Math.random(),
+                                text: responseText,
+                                isUser: false,
+                                timestamp: new Date(),
+                                hasJobButton: true,
+                                jobQuery: currentInput
+                            };
+                            setMessages(prev => [...prev, botMessage]);
+                        }
                     } else {
-                        const errorMessage: Message = {
-                            id: Date.now() + Math.random(),
-                            text: "Sorry, I couldn't find any job opportunities at the moment. Please try again later.",
-                            isUser: false,
-                            timestamp: new Date()
-                        };
-                        setMessages(prev => [...prev, errorMessage]);
+                        const errorText = "Sorry, I couldn't find any job opportunities at the moment. Please try again later.";
+
+                        // Update the existing streaming message with error
+                        if (streamingMessageId) {
+                            setMessages(prev =>
+                                prev.map(msg =>
+                                    msg.id === streamingMessageId
+                                        ? { ...msg, text: errorText }
+                                        : msg
+                                )
+                            );
+                        } else {
+                            // Fallback: create new message if no streaming message exists
+                            const errorMessage: Message = {
+                                id: Date.now() + Math.random(),
+                                text: errorText,
+                                isUser: false,
+                                timestamp: new Date()
+                            };
+                            setMessages(prev => [...prev, errorMessage]);
+                        }
                     }
                 },
-                
+
                 onCareerAdvice: (advice: string) => {
                     console.log('Career advice received');
                     setIsTyping(false);
-                    
-                    const botMessage: Message = {
-                        id: Date.now() + Math.random(),
-                        text: advice,
-                        isUser: false,
-                        timestamp: new Date(),
-                        isCareerAdvice: true
-                    };
-                    setMessages(prev => [...prev, botMessage]);
+                    hasCareerAdvice = true;
+
+                    // Clear any pending streaming timeout
+                    if (streamingTimeout) {
+                        clearTimeout(streamingTimeout);
+                        streamingTimeout = null;
+                    }
+
+                    // Update the existing streaming message with career advice
+                    if (streamingMessageId) {
+                        setMessages(prev =>
+                            prev.map(msg =>
+                                msg.id === streamingMessageId
+                                    ? {
+                                        ...msg,
+                                        text: advice,
+                                        isCareerAdvice: true
+                                    }
+                                    : msg
+                            )
+                        );
+                    } else {
+                        // Fallback: create new message if no streaming message exists
+                        const botMessage: Message = {
+                            id: Date.now() + Math.random(),
+                            text: advice,
+                            isUser: false,
+                            timestamp: new Date(),
+                            isCareerAdvice: true
+                        };
+                        setMessages(prev => [...prev, botMessage]);
+                    }
                 },
-                
+
                 onResponse: (response: string) => {
+                    // Accumulate streaming response chunks with double new lines
+                    if (streamingResponse.length > 0) {
+                        streamingResponse += '\n\n' + response;
+                    } else {
+                        streamingResponse = response;
+                    }
+
                     // Turn off typing indicator when first response chunk arrives
                     setIsTyping(false);
-                    // Create a new bot message for each response chunk
-                    const botMessage: Message = {
-                        id: Date.now() + Math.random(),
-                        text: response,
-                        isUser: false,
-                        timestamp: new Date()
-                    };
-                    setMessages(prev => [...prev, botMessage]);
+
+                    // Update or create the streaming message
+                    if (streamingMessageId === null) {
+                        // Create initial streaming message
+                        streamingMessageId = Date.now() + Math.random();
+                        const botMessage: Message = {
+                            id: streamingMessageId,
+                            text: streamingResponse,
+                            isUser: false,
+                            timestamp: new Date()
+                        };
+                        setMessages(prev => [...prev, botMessage]);
+
+                        // Clear any existing timeout
+                        if (streamingTimeout) {
+                            clearTimeout(streamingTimeout);
+                        }
+
+                        // Wait 1 second before showing loading dots (only if streaming continues)
+                        streamingTimeout = setTimeout(() => {
+                            // Only show dots if this message is still the current streaming message
+                            if (streamingMessageId && !hasJobResults && !hasCareerAdvice) {
+                                setCurrentlyStreamingMessageId(streamingMessageId);
+                            }
+                        }, 1000);
+                    } else {
+                        // Update existing streaming message
+                        setMessages(prev =>
+                            prev.map(msg =>
+                                msg.id === streamingMessageId
+                                    ? { ...msg, text: streamingResponse }
+                                    : msg
+                            )
+                        );
+                    }
                 },
-                
+
                 onError: (error: string) => {
                     console.error('Agent error:', error);
                     setIsTyping(false);
-                    // Only show error message if it's not a generic processing error
-                    if (!error.includes("Error processing request: 'output'")) {
+                    // Only show error message if it's not a generic processing error and no results were received
+                    if (!error.includes("Error processing request: 'output'") && !hasJobResults && !hasCareerAdvice) {
                         const errorMessage: Message = {
                             id: Date.now() + Math.random(),
                             text: error,
@@ -520,12 +626,13 @@ const ChatBotPage: React.FC = () => {
                             timestamp: new Date()
                         };
                         setMessages(prev => [...prev, errorMessage]);
-                    } else {
+                    } else if (!error.includes("Error processing request: 'output'")) {
                         console.log('Ignoring backend processing error - job results already received');
                     }
                 }
             });
-            
+
+
         } catch (error) {
             console.error('Error in handleSendMessage:', error);
             const errorMessage: Message = {
@@ -538,11 +645,19 @@ const ChatBotPage: React.FC = () => {
         } finally {
             setIsTyping(false);
             setIsSpecialTyping(false);
+            setIsProcessingComplete(true);
+            setCurrentlyStreamingMessageId(null);
+
+            // Clear any pending streaming timeout
+            if (streamingTimeout) {
+                clearTimeout(streamingTimeout);
+                streamingTimeout = null;
+            }
         }
     };
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && isProcessingComplete) {
             handleSendMessage();
         }
     };
@@ -585,6 +700,13 @@ const ChatBotPage: React.FC = () => {
                                     <BotContentWrapper>
                                         <BotMessageBubble style={{ whiteSpace: 'pre-line' }}>
                                             {message.isCareerAdvice ? formatCareerAdvice(message.text) : message.text}
+                                            {message.id === currentlyStreamingMessageId && (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '8px' }}>
+                                                    <TypingDot />
+                                                    <TypingDot />
+                                                    <TypingDot />
+                                                </span>
+                                            )}
                                             {message.hasJobButton && (
                                                 <>
                                                     <ViewJobsButton onClick={handleViewJobs}>
@@ -634,6 +756,7 @@ const ChatBotPage: React.FC = () => {
                         </BotMessageWrapper>
                     </MessageContainer>
                 )}
+
             </ChatArea>
 
             <InputContainer>
@@ -647,7 +770,7 @@ const ChatBotPage: React.FC = () => {
                     />
                     <SendButton
                         onClick={handleSendMessage}
-                        disabled={!inputValue.trim() || isTyping}
+                        disabled={!inputValue.trim() || isTyping || !isProcessingComplete}
                     >
                         ➤
                     </SendButton>
