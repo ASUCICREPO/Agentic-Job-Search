@@ -102,7 +102,7 @@ export class jobsearch1 extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
         allowedOrigins: ['*'],
-        allowedMethods: [lambda.HttpMethod.POST],
+        allowedMethods: [lambda.HttpMethod.POST,lambda.HttpMethod.GET],
         allowedHeaders: ['Content-Type']
       }
     });
@@ -144,7 +144,7 @@ export class jobsearch1 extends cdk.Stack {
     saveProfile.grantInvoke(resumeProcessorLambda);
 
     // Grant save-profile Lambda permissions to write to DynamoDB
-    StudentProfileTable.grantWriteData(saveProfile);
+    StudentProfileTable.grantReadWriteData(saveProfile);
 
     const kb = new bedrock.GraphKnowledgeBase(this, 'JobKnowledgeBase', {
       description: 'Knowledge base with jobs from multiple sources - contains all job listings updated daily',
