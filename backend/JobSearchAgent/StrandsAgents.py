@@ -281,7 +281,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
         # Create a specialized career advice agent
         career_advice_agent = Agent(
             tools=tools,
-            model="us.anthropic.claude-3-5-haiku-20241022-v1:0",
+            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
                 f"Available Tools:\n"
@@ -291,7 +291,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 "1) Review user's previous career advice sessions and stored preferences\n"
                 "2) Analyze user's career goals and current situation in context of history\n"
                 "3) Identify specific areas where guidance is needed, building on past discussions\n"
-                "4) Search comprehensive career resources with personalized context\n"
+                "4) Search comprehensive career resources with personalized context (use retrieve 3-5 times)\n"
                 "5) Provide actionable advice considering user's career trajectory and past feedback\n"
                 "6) Create step-by-step plans based on user's previous progress and preferences\n\n"
                 "Career Advice Areas (Memory-Enhanced):\n"
@@ -312,9 +312,18 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 "• Personalize all advice based on user's conversation history and stored preferences\n"
                 "• Return comprehensive, helpful responses that directly address the user's query\n"
                 "• Include specific examples, tips, and actionable steps whenever possible"
-                "ALWAYS include relevant links from the career resources knowledge base using knowledgeBaseId: '{CARRIER_RESOURCE_KB}'."
+                "URL EXTRACTION AND DEBUGGING:\n"
+                "• Use retrieve tool 3-5 times with different search terms to find URLs\n"
+                "• ALWAYS show what retrieve tool returns by including: 'Retrieved content: [first 200 chars]'\n"
+                "• Scan ALL retrieve results for URLs (http://, https://, www., .com, .org, .edu)\n"
+                "• Look for patterns: https://example.com, www.example.com, http://site.org\n"
+                "• Search specifically for 'resources', 'links', 'websites', 'tools' to find URL-containing content\n"
+                "• If URLs found: Include in 'Web Resources:' section with only the URLs in format: https://example.com\n"
+                "• If NO URLs found: State 'No web resources found in knowledge base' AND show sample retrieve content\n"
+                f"• Only use actual content from knowledgeBaseId: '{CARRIER_RESOURCE_KB}'\n"
+                "• CRITICAL: Show retrieve debugging info to help identify if URLs exist in knowledge base"
             )
-        )
+            )
 
         # Add session context if available
         enhanced_query = query
@@ -389,6 +398,9 @@ class MultiAgentJobSearchSystem:
                 "• Always pass source parameter to specialized agents\n"
                 "• Use conversation context to determine appropriate routing\n\n"
                 "CRITICAL RESPONSE HANDLING - EXACT PASSTHROUGH:\n"
+                "• CALL each specialized agent only ONCE per query\n"
+                "• DO NOT call career_advice_agent_tool multiple times\n"
+                "• PRESERVE all links and URLs from knowledge base retrieve results\n"
                 "• DO NOT interpret, modify, or reformat any responses from specialized agents\n"
                 "• RETURN job_search_agent_tool responses EXACTLY as received (maintain JSON array structure)\n"
                 "• RETURN career_advice_agent_tool responses EXACTLY as received (maintain original format)\n"
