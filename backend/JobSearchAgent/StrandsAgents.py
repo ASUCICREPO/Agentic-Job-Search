@@ -15,18 +15,24 @@ from typing import Any, Dict
 from bedrock_agentcore.memory import MemoryClient
 
 from strands import Agent, tool
-from strands_tools import retrieve
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
-from tools import get_student_profile, save_student_profile, sanitize_email_for_actor_id, save_job_recommendations, get_job_recommendations
+from tools import get_student_profile, sanitize_email_for_actor_id, save_job_recommendations, get_job_recommendations, retrieve
+from tools.retrieve import get_top_sources_for_current_request, clear_current_request_sources
 
 # Environment Variables
-AWS_REGION = os.getenv('AWS_REGION')
+AWS_REGION = os.getenv('AWS_REGION', 'us-west-2')
 AGENTCORE_MEMORY_ID = os.getenv('AGENTCORE_MEMORY_ID')
 AGENTCORE_USER_PREFERENCE_STRATEGY_ID = os.getenv('AGENTCORE_USER_PREFERENCE_STRATEGY_ID')
 JOB_SEARCH_KB = os.getenv('JOB_SEARCH_KB') # Job search knowledge base ID - agent should use this for retrieve tool calls
 CARRIER_RESOURCE_KB = os.getenv('CARRIER_RESOURCE_KB')  # Carrier resource knowledge base ID for additional resources
+
+# Fallback handling for missing knowledge bases
+if not CARRIER_RESOURCE_KB:
+    print("Warning: CARRIER_RESOURCE_KB not set, career advice may not work properly")
+if not JOB_SEARCH_KB:
+    print("Warning: JOB_SEARCH_KB not set, job search may not work properly")
 
 # Specialized Agent Tools using the "Agents as Tools" pattern
 
@@ -216,12 +222,9 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
         Job search results with personalized recommendations
     """
     try:
-        # Get memory tools
-        # Conditionally include save_job_recommendations based on source
      # Conditionally include tools based on source
         base_tools = [retrieve, get_student_profile]
         if source == "batch":
-            base_tools.append(save_student_profile)
             base_tools.append(get_job_recommendations)
             base_tools.append(save_job_recommendations)
 
@@ -276,7 +279,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
         memory_tools = _get_memory_tools(session_id, email)
 
         # Combine all available tools
-        tools = [retrieve, save_student_profile, get_student_profile] + memory_tools
+        tools = [retrieve, get_student_profile] + memory_tools
 
         # Create a specialized career advice agent
         career_advice_agent = Agent(
@@ -284,22 +287,17 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
             model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
-                f"Available Tools:\n"
+                "Available Tools:\n"
                 f"• retrieve: Access career resources using knowledgeBaseId: '{CARRIER_RESOURCE_KB}'\n"
-                "• Memory tools: Access conversation history, previous advice sessions, and stored preferences\n\n"
+                "• get_student_profile: Check user profile\n"
+                "• Memory tools: Access conversation history, previous advice sessions, and stored preferences\n"
                 "MEMORY-AWARE CAREER GUIDANCE WORKFLOW:\n"
                 "1) Review user's previous career advice sessions and stored preferences\n"
                 "2) Analyze user's career goals and current situation in context of history\n"
                 "3) Identify specific areas where guidance is needed, building on past discussions\n"
-                "4) Search comprehensive career resources with personalized context (use retrieve 3-5 times)\n"
+                "4) Search comprehensive career resources with personalized context \n"
                 "5) Provide actionable advice considering user's career trajectory and past feedback\n"
                 "6) Create step-by-step plans based on user's previous progress and preferences\n\n"
-                "Career Advice Areas (Memory-Enhanced):\n"
-                "• Resume writing and optimization (reference previous resume feedback)\n"
-                "• Interview preparation and techniques (recall past interview experiences)\n"
-                "• Career transition strategies (consider user's current career trajectory)\n"
-                "• Skill development and learning paths (based on user's skill assessment history)\n"
-                "• Networking and professional development (reference past networking activities)\n"
                 "MEMORY INTEGRATION:\n"
                 "• Always reference previous career advice sessions and user preferences\n"
                 "• Consider user's career goals and objectives from stored information\n"
@@ -311,19 +309,13 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 "• Focus on helping users advance their careers and achieve their professional goals\n"
                 "• Personalize all advice based on user's conversation history and stored preferences\n"
                 "• Return comprehensive, helpful responses that directly address the user's query\n"
-                "• Include specific examples, tips, and actionable steps whenever possible"
-                "URL EXTRACTION AND DEBUGGING:\n"
-                "• Use retrieve tool 3-5 times with different search terms to find URLs\n"
-                "• ALWAYS show what retrieve tool returns by including: 'Retrieved content: [first 200 chars]'\n"
-                "• Scan ALL retrieve results for URLs (http://, https://, www., .com, .org, .edu)\n"
-                "• Look for patterns: https://example.com, www.example.com, http://site.org\n"
-                "• Search specifically for 'resources', 'links', 'websites', 'tools' to find URL-containing content\n"
-                "• If URLs found: Include in 'Web Resources:' section with only the URLs in format: https://example.com\n"
-                "• If NO URLs found: State 'No web resources found in knowledge base' AND show sample retrieve content\n"
-                f"• Only use actual content from knowledgeBaseId: '{CARRIER_RESOURCE_KB}'\n"
-                "• CRITICAL: Show retrieve debugging info to help identify if URLs exist in knowledge base"
+                "• Include specific examples, tips, and actionable steps whenever possible\n"
+                "• Try to provide website links to the resources you are providing\n"
+                "CRITICAL: DO NOT FABRICATE OR MAKE UP ANY INFORMATION\n"
+                "• NEVER invent, create, or fabricate documents, websites, URLs, or resources that don't exist\n"
+                "• If no relevant information exists in the knowledge base, state this clearly\n"
             )
-            )
+        )
 
         # Add session context if available
         enhanced_query = query
@@ -357,7 +349,7 @@ class MultiAgentJobSearchSystem:
         memory_tools = _get_memory_tools(session_id, email)
 
         # Combine all available tools
-        tools = [job_search_agent_tool, career_advice_agent_tool, save_student_profile, get_student_profile] + memory_tools
+        tools = [job_search_agent_tool, career_advice_agent_tool, get_student_profile] + memory_tools
 
         self.orchestrator_agent = Agent(
             tools=tools,
@@ -365,11 +357,9 @@ class MultiAgentJobSearchSystem:
             # model="global.anthropic.claude-sonnet-4-20250514-v1:0",
             system_prompt=(
                 "You are an intelligent Orchestrator Agent for a Career Services platform with full memory access.\n\n"
-                "CRITICAL REQUIREMENT: You MUST return responses from specialized agents EXACTLY as received, without any interpretation, modification, or reformatting. Do not add text, explanations, or alter JSON structures.\n\n"
                 "Available Specialized Agents:\n"
                 "• job_search_agent_tool: Specialized in job search and job recommendations\n"
                 "• career_advice_agent_tool: Specialized in career guidance and professional development\n"
-                "• save_student_profile: Save user notification preferences\n"
                 "• get_student_profile: Check user profile and preferences\n"
                 "• Memory tools: Access conversation history, preferences, and stored user information (read-only)\n\n"
                 "PERSONALIZED JOB SEARCH WORKFLOW:\n"
@@ -378,37 +368,26 @@ class MultiAgentJobSearchSystem:
                 "3) Provide context about user's preferences being used for search\n"
                 "4) Enrich job search query with user's profile (skills, experience, locations, salary expectations)\n"
                 "5) Call job_search_agent_tool with enhanced query and source parameter\n"
-                "6) RETURN THE EXACT JSON RESPONSE FROM job_search_agent_tool WITHOUT ANY MODIFICATION\n"
-                "7) DO NOT parse, restructure, or alter the JSON array structure\n"
-                "8) PRESERVE all job details, User_fit explanations, and original formatting\n\n"
                 "MEMORY & PREFERENCE MANAGEMENT:\n"
                 "• Check memory tools first for existing user preferences and job search history\n"
                 "• Use existing preferences to personalize job search queries\n"
                 "• Provide context about which preferences are being used\n"
-                "• Store updated preferences using save_student_profile for future sessions\n\n"
-                "NOTIFICATION OPT-IN DETECTION:\n"
-                "• If user says 'Yes', 'Yes I would like notifications', 'I want notifications', 'Sign me up', etc.\n"
-                "• IMMEDIATELY call save_student_profile(email=user_email, opt_in_status=True)\n"
-                "• Return confirmation message like 'Great! You\'re now signed up for daily job notifications.'\n\n"
                 "ROUTING PRINCIPLES:\n"
                 "• Job search queries → retrieve preferences → job_search_agent_tool\n"
                 "• Career advice queries → career_advice_agent_tool directly\n"
-                "• Notification opt-in responses ('Yes', 'No', 'I want notifications') → save_student_profile directly\n"
-                "• Profile updates → save_student_profile directly\n"
                 "• Always pass source parameter to specialized agents\n"
                 "• Use conversation context to determine appropriate routing\n\n"
-                "CRITICAL RESPONSE HANDLING - EXACT PASSTHROUGH:\n"
+                "CRITICAL RESPONSE HANDLING - ACKNOWLEDGMENT ONLY:\n"
                 "• CALL each specialized agent only ONCE per query\n"
-                "• DO NOT call career_advice_agent_tool multiple times\n"
-                "• PRESERVE all links and URLs from knowledge base retrieve results\n"
+                "• WAIT for the tool execution to complete\n"
+                "• If tool execution is successful and response looks good, provide brief acknowledgment\n"
+                "• Respond with: 'Job Search Agent replied' or 'Career Agent replied'\n"
+                "• DO NOT pass through or return the full agent responses\n"
                 "• DO NOT interpret, modify, or reformat any responses from specialized agents\n"
-                "• RETURN job_search_agent_tool responses EXACTLY as received (maintain JSON array structure)\n"
-                "• RETURN career_advice_agent_tool responses EXACTLY as received (maintain original format)\n"
-                "• DO NOT add introductory text, explanations, or conclusions\n"
-                "• DO NOT parse or restructure JSON responses\n"
-                "• DO NOT summarize or abbreviate agent responses\n"
-                "• PASS THROUGH responses in their original, unaltered form\n"
-                "• PRESERVE exact JSON structure and content from agents\n\n"
+                "• The specialized agents handle all response formatting and user interaction directly\n"
+                "• Only respond with error messages if tool execution fails\n"
+                "• Keep acknowledgment messages brief to minimize latency\n"
+                "• DO NOT add introductory text, explanations, or conclusions beyond the acknowledgment\n"
             )
         )
 
@@ -448,6 +427,9 @@ async def handle_agent_request(payload):
     if not prompt:
         yield {"error": "Error: 'prompt' is required."}
         return
+
+    # Clear any previous sources from other requests (runtime dies after each query)
+    clear_current_request_sources()
 
     try:
         # Initialize the multi-agent orchestrator system with memory support
@@ -497,6 +479,7 @@ async def handle_agent_request(payload):
         job_search_started = False  # Track if job search was initiated
         carrier_advice_started = False  # Track if career advice was initiated
         job_results_received = False  # Track if job results were received
+        career_advice_result_sent = False  # Track if career advice result was sent
 
         async for event in orchestrator_system.orchestrator_agent.stream_async(enhanced_prompt):
 
@@ -528,6 +511,7 @@ async def handle_agent_request(payload):
                                         if "text" in result_content:
                                             yield {"carrier_advice_result": result_content["text"]}
                                             final_response = result_content["text"]
+                                            career_advice_result_sent = True
 
                 # Tool usage information - show the streaming tool input being built
                 elif "current_tool_use" in event:
@@ -559,6 +543,12 @@ async def handle_agent_request(payload):
                     yield {"notification_prompt": notification_msg}
             except Exception as e:
                 print(f"Error checking notification preferences: {e}")
+
+        # Yield sources after career advice if career advice was provided
+        if career_advice_result_sent:
+            top_sources = get_top_sources_for_current_request(limit=5)
+            if top_sources:
+                yield {"sources": top_sources}
 
         # Create memory event for assistant response
         if final_response:
