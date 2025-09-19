@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from strands import tool
 
 # Environment Variables
-TABLE_NAME = os.getenv('STUDENT_PROFILE_TABLE_NAME')
+STUDENT_PROFILE_TABLE_NAME = os.getenv('STUDENT_PROFILE_TABLE_NAME')
 JOB_RECOMMENDATIONS_TABLE_NAME = os.getenv('JOB_RECOMMENDATIONS_TABLE_NAME')
 AWS_REGION = os.getenv('AWS_REGION')
 
@@ -46,197 +46,56 @@ class StudentProfile(BaseModel):
     opt_in_status: bool = Field(..., description="Whether the student has opted in to receive notifications")
 
 @tool
-def get_student_profile(email: str = "", get_all_opted_in: bool = False) -> Dict[str, Any]:
+def get_student_profile(email: str) -> Dict[str, Any]:
     """
-    Check if a student profile exists in DynamoDB or get all opted-in users for batch processing.
+    Check if a student profile exists in DynamoDB based on email address.
 
-    Use this tool to retrieve student profile information based on their email address,
-    or get all users who opted in for notifications (for batch processing).
+    Use this tool to verify if a student has a profile in the system.
 
     Args:
-        email: Student's email address (e.g., "student@university.edu"). Leave empty when get_all_opted_in=True
-        get_all_opted_in: If True, returns all users who opted in for notifications (for batch process)
+        email: Student's email address (e.g., "student@university.edu")
 
     Returns:
-        Dictionary containing student profile information or list of opted-in users
+        Dictionary indicating whether the profile exists
     """
     try:
-        # Initialize DynamoDB client
-        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-        table = dynamodb.Table(TABLE_NAME)
-
-        # If getting all opted-in users for batch processing
-        if get_all_opted_in:
-            response = table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('optInStatus').eq(True)
-            )
-            items = response.get('Items', [])
-            
-            opted_in_users = []
-            for item in items:
-                user_info = {
-                    'email': item.get('email', ''),
-                    'notification_method': item.get('notificationMethod', 'email'),
-                    'action_id': item.get('actionID', '')
-                }
-                opted_in_users.append(user_info)
-            
-            return {
-                "success": True,
-                "count": len(opted_in_users),
-                "users": opted_in_users,
-                "message": f"Found {len(opted_in_users)} users opted in for notifications"
-            }
-
-        # Single user profile lookup
+        # Validate email parameter
         if not email:
             return {
                 "exists": False,
-                "message": "Email is required for single user lookup"
+                "message": "Email is required"
             }
+
+        # Initialize DynamoDB client
+        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+        table = dynamodb.Table(STUDENT_PROFILE_TABLE_NAME)
 
         # Sanitize email to get the actor_id for database lookup using global function
         sanitized_actor_id = sanitize_email_for_actor_id(email)
 
-        # Query for existing records with sanitized actor_id
-        response = table.scan(
-            FilterExpression=boto3.dynamodb.conditions.Attr('actionID').eq(sanitized_actor_id)
-        )
+        # Get the student profile directly using the primary key (actionID)
+        response = table.get_item(Key={'actionID': sanitized_actor_id})
 
-        items = response.get('Items', [])
+        item = response.get('Item')
 
-        if not items:
+        if not item:
             return {
                 "exists": False,
                 "message": f"No profile found for email: {email}"
             }
 
-        # Get the student profile (there should only be one record per actionID)
-        # Since actionID is now the partition key, we just take the first item
-        most_recent = items[0]
-
-        opt_in_status = most_recent.get('optInStatus', False)
-        notification_method = most_recent.get('notificationMethod', 'email')
-        stored_email = most_recent.get('email', email)  # Fallback to provided email if not stored
+        stored_email = item.get('email', email)  # Fallback to provided email if not stored
 
         return {
             "exists": True,
             "email": stored_email,
-            "optInStatus": opt_in_status,
-            "notification_method": notification_method,
             "message": "Student profile found"
         }
     except Exception as e:
-        if get_all_opted_in:
-            return {
-                "success": False,
-                "message": f"Error retrieving opted-in users: {str(e)}",
-                "users": []
-            }
-        else:
-            return {
-                "exists": False,
-                "error": True,
-                "message": f"Error retrieving student profile: {str(e)}"
-            }
-
-@tool
-def save_student_profile(email: str, opt_in_status: bool, notification_method: str = "email", update_existing: bool = True) -> Dict[str, Any]:
-    """
-    Save or update student profile information in DynamoDB.
-
-    Use this tool to store student email and notification preferences. This tool should be used when a student
-    provides their email address and indicates whether they want to receive notifications about job opportunities.
-
-    After collecting the email address from the user, use this tool to store their information.
-
-    The tool will create a new record or update an existing one based on the sanitized email (actor_id).
-
-    Args:
-        email: Student's email address (e.g., "student@university.edu")
-        opt_in_status: Whether the student has opted in to receive notifications (true/false)
-        notification_method: How the student prefers to be notified - "email", "phone", or "both" (default: "email")
-        update_existing: Whether to update if a record with this email already exists (default: True)
-
-    Returns:
-        Status information about the database operation
-    """
-    try:
-        # Check if required environment variables are set
-        if not TABLE_NAME:
-            return {
-                "success": False,
-                "message": "STUDENT_PROFILE_TABLE_NAME environment variable not set"
-            }
-        
-        # Initialize DynamoDB client
-        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-        table = dynamodb.Table(TABLE_NAME)
-
-        # Sanitize email to create the actor_id using global function
-        sanitized_actor_id = sanitize_email_for_actor_id(email)
-
-        # Check if this record already exists, if update_existing is False, we'll inform about it
-        existing_record = False
-
-        if update_existing:
-            # Check for existing records with sanitized actor_id
-            response = table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('actionID').eq(sanitized_actor_id)
-            )
-
-            if response.get('Items', []):
-                existing_record = True
-
-        # Validate notification_method value
-        valid_methods = ["email", "phone", "both"]
-        validated_method = notification_method.lower() if notification_method.lower() in valid_methods else "email"
-
-        # Get existing item to preserve other fields
-        existing_item = {}
-        if existing_record:
-            try:
-                get_response = table.get_item(Key={'actionID': sanitized_actor_id})
-                existing_item = get_response.get('Item', {})
-            except:
-                pass
-        
-        # Prepare item for DynamoDB - preserve existing fields and add/update opt-in status
-        item = existing_item.copy() if existing_item else {}
-        item.update({
-            'actionID': sanitized_actor_id,  # Sanitized email as primary key
-            'email': email,  # Original email stored separately
-            'optInStatus': opt_in_status,
-            'notificationMethod': validated_method
-        })
-
-        # Put item in DynamoDB
-        table.put_item(Item=item)
-
-        if existing_record:
-            return {
-                "success": True,
-                "message": "Student profile updated successfully",
-                "updated": True,
-                "actor_id": sanitized_actor_id,
-                "email": email,
-                "opt_in_status": opt_in_status,
-                "notification_method": validated_method
-            }
-        else:
-            return {
-                "success": True,
-                "message": "New student profile saved successfully",
-                "updated": False,
-                "actor_id": sanitized_actor_id,
-                "email": email,
-                "opt_in_status": opt_in_status,
-                "notification_method": validated_method
-            }
-    except Exception as e:
         return {
-            "success": False,
-            "message": f"Error saving student profile: {str(e)}"
+            "exists": False,
+            "error": True,
+            "message": f"Error retrieving student profile: {str(e)}"
         }
 
 @tool
