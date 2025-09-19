@@ -274,22 +274,6 @@ const TypingDot = styled.div`
 `;
 
 
-const SpecialTypingIndicator = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 15px 20px;
-  background: linear-gradient(135deg, #FFF9C4 0%, #FFC627 100%);
-  border-radius: 20px;
-  max-width: 60%;
-  font-size: 0.95rem;
-  color: #333;
-`;
-
-const TypingDotsContainer = styled.div`
-  display: flex;
-  gap: 3px;
-`;
 
 const ViewJobsButton = styled.button`
   background: #8B1538;
@@ -302,9 +286,154 @@ const ViewJobsButton = styled.button`
   display: block;
   font-size: 1rem;
   font-weight: 600;
-  
+
   &:hover {
     background: #6d1028;
+  }
+`;
+
+const SourcesToggleButton = styled.button`
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  color: #495057;
+  border: 1px solid #dee2e6;
+  padding: 10px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 16px 0 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: left 0.5s ease;
+  }
+
+  &:hover {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    color: #343a40;
+    border-color: #adb5bd;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+
+    &::before {
+      left: 100%;
+    }
+  }
+
+  &:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+`;
+
+const SourcesContainer = styled.div<{ $isExpanded: boolean }>`
+  max-height: ${props => props.$isExpanded ? '300px' : '0px'};
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-top: 12px;
+  opacity: ${props => props.$isExpanded ? '1' : '0'};
+`;
+
+const SourcesList = styled.div`
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #e9ecef;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #dee2e6, transparent);
+  }
+`;
+
+const SourceLink = styled.a`
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #dee2e6;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  color: #495057;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  gap: 8px;
+
+  &::before {
+    content: "📄";
+    font-size: 1rem;
+    opacity: 0.8;
+    transition: all 0.3s ease;
+    z-index: 2;
+    position: relative;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(52, 152, 219, 0.15), transparent);
+    transition: left 0.6s ease;
+    z-index: 1;
+  }
+
+  &:hover {
+    background: linear-gradient(135deg, #e8f4f8 0%, #d1ecf1 100%);
+    color: #2c3e50;
+    border-color: #3498db;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(52, 152, 219, 0.2);
+    text-decoration: none;
+
+    &::before {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+
+    &::after {
+      left: 100%;
+    }
+  }
+
+  &:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
+  }
+
+  &:focus {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
   }
 `;
 
@@ -317,6 +446,7 @@ interface Message {
     timestamp: Date;
     hasJobButton?: boolean;
     jobQuery?: string;
+    sources?: Array<{url: string, score: number}>;
 }
 
 interface Job {
@@ -335,6 +465,106 @@ interface Job {
   experience: string;
 }
 
+// Helper function to update message with career advice and sources
+const updateMessageWithCareerAdviceAndSources = (
+    advice: string,
+    sources: Array<{url: string, score: number}>,
+    streamingMessageId: number | null,
+    setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+) => {
+    console.log('🔧 updateMessageWithCareerAdviceAndSources called:', {
+        adviceLength: advice?.length,
+        sourcesCount: sources?.length,
+        streamingMessageId,
+        hasSources: sources?.length > 0,
+        advicePreview: advice?.substring(0, 50) + '...'
+    });
+
+    if (streamingMessageId) {
+        console.log('📝 Updating existing message with ID:', streamingMessageId);
+        setMessages(prev => {
+            console.log('📝 Current messages before update:', prev.map(m => ({ id: m.id, textLength: m.text?.length })));
+            const updated = prev.map(msg => {
+                if (msg.id === streamingMessageId) {
+                    console.log('📝 Found matching message, updating with career advice');
+                    return {
+                        ...msg,
+                        text: advice,
+                        sources: sources.length > 0 ? [...sources] : undefined
+                    };
+                }
+                return msg;
+            });
+            console.log('📝 Messages after update:', updated.map(m => ({ id: m.id, textLength: m.text?.length })));
+            return updated;
+        });
+    } else {
+        console.log('📝 No streaming message ID, creating new message');
+        // Fallback: create new message if no streaming message exists
+        const botMessage: Message = {
+            id: Date.now() + Math.random(),
+            text: advice,
+            isUser: false,
+            timestamp: new Date(),
+            sources: sources.length > 0 ? [...sources] : undefined
+        };
+        setMessages(prev => [...prev, botMessage]);
+    }
+};
+
+// Helper function to extract filename from URL
+const extractFilename = (url: string): string => {
+  try {
+    // Handle S3 URLs like s3://bucket/path/filename.pdf
+    if (url.startsWith('s3://')) {
+      const parts = url.split('/');
+      return parts[parts.length - 1];
+    }
+    // Handle regular URLs
+    const urlParts = url.split('/');
+    return urlParts[urlParts.length - 1];
+  } catch (error) {
+    return url; // Fallback to full URL if parsing fails
+  }
+};
+
+// Helper function to convert S3 URL to public HTTP URL
+const convertS3ToPublicUrl = (url: string): string => {
+  try {
+    console.log('🔗 Converting URL:', url);
+
+    // Handle S3 URLs like s3://bucket/path/filename.pdf
+    if (url.startsWith('s3://')) {
+      // Remove s3:// prefix and split by /
+      const s3Path = url.substring(5); // Remove 's3://'
+      const parts = s3Path.split('/');
+
+      if (parts.length >= 2) {
+        const bucket = parts[0];
+        const key = parts.slice(1).join('/');
+
+        // Convert to public S3 HTTP URL
+        const publicUrl = `https://${bucket}.s3.amazonaws.com/${key}`;
+        console.log('✅ Converted S3 URL to public URL:', publicUrl);
+        return publicUrl;
+      }
+    }
+
+    // If it's already an HTTP URL, return as is
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      console.log('ℹ️ URL is already HTTP/HTTPS:', url);
+      return url;
+    }
+
+    // For any other URL format, return as is
+    console.log('⚠️ URL is not S3 or HTTP format, returning as-is:', url);
+    return url;
+  } catch (error) {
+    console.error('❌ Error converting S3 URL to public URL:', error);
+    return url; // Fallback to original URL
+  }
+};
+
 const ChatBotPage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -343,11 +573,13 @@ const ChatBotPage: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
-    const [isSpecialTyping, setIsSpecialTyping] = useState(false);
     const [isProcessingComplete, setIsProcessingComplete] = useState(true);
     const [currentlyStreamingMessageId, setCurrentlyStreamingMessageId] = useState<number | null>(null);
     const [showJobPopup, setShowJobPopup] = useState(false);
     const [jobs, setJobs] = useState<Job[]>([]);
+    const [currentSources, setCurrentSources] = useState<Array<{url: string, score: number}>>([]);
+    const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set());
+    const [pendingCareerAdvice, setPendingCareerAdvice] = useState<string | null>(null);
     const chatAreaRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -383,10 +615,26 @@ const ChatBotPage: React.FC = () => {
         setShowJobPopup(true);
     };
 
+    const toggleSources = (messageId: number) => {
+        setExpandedSources(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(messageId)) {
+                newSet.delete(messageId);
+            } else {
+                newSet.add(messageId);
+            }
+            return newSet;
+        });
+    };
+
 
 
     const handleSendMessage = async () => {
         if (!inputValue.trim()) return;
+
+        console.log('🎯 Starting new request with input:', inputValue);
+        console.log('🚀 === NEW REQUEST STARTED ===');
+        console.log('📝 User input:', inputValue);
 
         const userMessage: Message = {
             id: Date.now() + Math.random(),
@@ -410,25 +658,57 @@ const ChatBotPage: React.FC = () => {
         let streamingMessageId: number | null = null;
         let hasJobResults = false;
         let hasCareerAdvice = false;
+        let jobSearchStarted = false;
+        let careerAdviceStarted = false;
         let streamingTimeout: NodeJS.Timeout | null = null;
+        let orchestratorStarted = false;
+        let waitingForResponse = false;
+        let waitingForCareerAdviceResult = false;
+        let waitingForJobResult = false;
+        let waitingForFinalResult = false;
+        let localPendingCareerAdvice: string | null = null; // Local variable for immediate access
 
         try {
             await invokeAgent(currentInput, {
                 onThinking: (thinking: string) => {
-                    // Agent thinking - no logging needed
+                    console.log('🤔 onThinking received:', thinking);
+
+                    if (!orchestratorStarted) {
+                        console.log('🎭 === ORCHESTRATOR STARTED ===');
+                        console.log('📝 Orchestrator thinking chunks will be ignored (as requested)');
+                        orchestratorStarted = true;
+                        console.log('🔄 Current state: Orchestrator active, ignoring thinking chunks');
+                    }
+
+                    // Ignore thinking chunks as per user request - only process response chunks
+                    console.log('🚫 Ignoring thinking chunk (only response chunks matter)');
                 },
 
                 onJobSearchStarted: () => {
-                    // Job search started - no logging needed
+                    console.log('🔍 onJobSearchStarted triggered');
+                    jobSearchStarted = true;
+                    waitingForJobResult = true;
+                    console.log('🎯 === STATE CHANGE: Job Search Started ===');
+                    console.log('🔄 Current state: Waiting for job_agent_result');
+                    console.log('📋 Will show job results when received');
                 },
 
                 onCareerAdviceStarted: () => {
-                    // Career advice started - no logging needed
+                    console.log('💼 onCareerAdviceStarted triggered');
+                    careerAdviceStarted = true;
+                    waitingForCareerAdviceResult = true;
+                    console.log('🎯 === STATE CHANGE: Career Advice Started ===');
+                    console.log('🔄 Current state: Waiting for carrier_advice_result');
+                    console.log('🎓 Will show career advice when received, then wait for sources');
                 },
 
                 onJobResults: (jobs: Job[], responseText: string) => {
+                    console.log('📋 onJobResults received:', { jobsCount: jobs?.length, responseText: responseText?.substring(0, 100) });
+                    console.log('✅ === JOB RESULTS RECEIVED ===');
+                    console.log('🔄 State completed: job_agent_result received and processed');
                     setIsTyping(false);
                     hasJobResults = true;
+                    waitingForJobResult = false;
 
                     // Clear any pending streaming timeout
                     if (streamingTimeout) {
@@ -491,8 +771,13 @@ const ChatBotPage: React.FC = () => {
                 },
 
                 onCareerAdvice: (advice: string) => {
+                    console.log('🎓 onCareerAdvice received:', advice?.substring(0, 100), '...');
+                    console.log('✅ === CAREER ADVICE RESULT RECEIVED ===');
+                    console.log('🔄 Current state: carrier_advice_result received, now waiting for sources');
+                    console.log('📋 streamingMessageId at career advice:', streamingMessageId);
                     setIsTyping(false);
                     hasCareerAdvice = true;
+                    waitingForCareerAdviceResult = false;
 
                     // Clear any pending streaming timeout
                     if (streamingTimeout) {
@@ -500,31 +785,88 @@ const ChatBotPage: React.FC = () => {
                         streamingTimeout = null;
                     }
 
-                    // Update the existing streaming message with career advice
-                    if (streamingMessageId) {
-                        setMessages(prev =>
-                            prev.map(msg =>
-                                msg.id === streamingMessageId
-                                    ? {
-                                        ...msg,
-                                        text: advice
-                                    }
-                                    : msg
-                            )
-                        );
+                    // Store the career advice and check if we have sources ready
+                    console.log('💾 Storing pending career advice');
+                    console.log('📝 Career advice length:', advice?.length);
+                    console.log('📝 Career advice preview:', advice?.substring(0, 100) + '...');
+                    console.log('🔍 Before setting, localPendingCareerAdvice:', localPendingCareerAdvice);
+                    console.log('🔍 Before setting, React pendingCareerAdvice:', pendingCareerAdvice);
+
+                    // Store in both local variable and React state
+                    localPendingCareerAdvice = advice;
+                    setPendingCareerAdvice(advice);
+
+                    console.log('✅ Pending career advice stored successfully');
+                    console.log('🔍 After setting, localPendingCareerAdvice exists:', !!localPendingCareerAdvice);
+
+                    // If we already have sources, update the message now
+                    if (currentSources.length > 0) {
+                        console.log('🔄 Sources already available, updating message immediately');
+                        updateMessageWithCareerAdviceAndSources(advice, currentSources, streamingMessageId, setMessages);
+                        setCurrentSources([]); // Clear sources for next request
+                        setPendingCareerAdvice(null); // Clear React state
+                        localPendingCareerAdvice = null; // Clear local variable
                     } else {
-                        // Fallback: create new message if no streaming message exists
-                        const botMessage: Message = {
-                            id: Date.now() + Math.random(),
-                            text: advice,
-                            isUser: false,
-                            timestamp: new Date()
-                        };
-                        setMessages(prev => [...prev, botMessage]);
+                        console.log('⏳ Sources not yet available, waiting for onSources callback');
+                    }
+                    // If no sources yet, wait for onSources callback
+                },
+
+                onSources: (sources: Array<{url: string, score: number}>) => {
+                    console.log('📚 onSources received:', { count: sources?.length, sources: sources?.slice(0, 2) });
+                    console.log('✅ === SOURCES RECEIVED ===');
+                    console.log('🔄 State completed: sources received for career advice');
+                    console.log('📋 streamingMessageId at sources:', streamingMessageId);
+                    console.log('💾 localPendingCareerAdvice exists:', !!localPendingCareerAdvice);
+                    console.log('💾 React pendingCareerAdvice exists:', !!pendingCareerAdvice);
+                    setCurrentSources(sources);
+
+                    // If we have pending career advice, update the message now
+                    if (localPendingCareerAdvice) {
+                        console.log('🔄 Updating message with pending career advice and sources');
+                        updateMessageWithCareerAdviceAndSources(localPendingCareerAdvice, sources, streamingMessageId, setMessages);
+                        setCurrentSources([]); // Clear sources for next request
+                        setPendingCareerAdvice(null); // Clear React state
+                        localPendingCareerAdvice = null; // Clear local variable
+                        console.log('✅ Career advice flow completed successfully');
+                    } else {
+                        console.log('⚠️ No pending career advice found when sources received!');
+                        console.log('🔍 Debug: hasCareerAdvice =', hasCareerAdvice);
+                        console.log('🔍 Debug: careerAdviceStarted =', careerAdviceStarted);
+                        console.log('🔍 Debug: localPendingCareerAdvice =', localPendingCareerAdvice);
                     }
                 },
 
                 onResponse: (response: string) => {
+                    console.log('💬 onResponse received:', response?.substring(0, 100), '...');
+                    console.log('🔍 Agent states:', {
+                        careerAdviceStarted,
+                        jobSearchStarted,
+                        waitingForResponse,
+                        waitingForCareerAdviceResult,
+                        waitingForJobResult,
+                        waitingForFinalResult
+                    });
+
+                    if (!waitingForResponse && !waitingForCareerAdviceResult && !waitingForJobResult) {
+                        console.log('🎯 === ORCHESTRATOR RESPONSE STARTED ===');
+                        console.log('🔄 Current state: Waiting for response chunks from orchestrator');
+                        waitingForResponse = true;
+                    }
+
+                    // Skip orchestrator responses if specialized agents have been started
+                    if (careerAdviceStarted || jobSearchStarted) {
+                        console.log('🚫 Skipping orchestrator response - specialized agent handling');
+                        console.log('🔄 Current state: Specialized agent is active');
+                        return; // Don't process orchestrator response if specialized agents are handling it
+                    }
+
+                    console.log('📝 Processing orchestrator response chunk');
+                    console.log('🔄 Current state: Accumulating response chunks, will keep looping until:');
+                    console.log('  - carrier_advice_started received (then wait for carrier_advice_result + sources)');
+                    console.log('  - job_search_started received (then wait for job_agent_result)');
+                    console.log('  - final_result received (if neither specialized agent started)');
+
                     // Accumulate streaming response chunks with double new lines
                     if (streamingResponse.length > 0) {
                         streamingResponse += '\n\n' + response;
@@ -539,6 +881,7 @@ const ChatBotPage: React.FC = () => {
                     if (streamingMessageId === null) {
                         // Create initial streaming message
                         streamingMessageId = Date.now() + Math.random();
+                        console.log('📝 Created new streaming message with ID:', streamingMessageId);
                         const botMessage: Message = {
                             id: streamingMessageId,
                             text: streamingResponse,
@@ -555,7 +898,7 @@ const ChatBotPage: React.FC = () => {
                         // Wait 1 second before showing loading dots (only if streaming continues)
                         streamingTimeout = setTimeout(() => {
                             // Only show dots if this message is still the current streaming message
-                            if (streamingMessageId && !hasJobResults && !hasCareerAdvice) {
+                            if (streamingMessageId && !hasJobResults && !hasCareerAdvice && !jobSearchStarted && !careerAdviceStarted) {
                                 setCurrentlyStreamingMessageId(streamingMessageId);
                             }
                         }, 1000);
@@ -572,7 +915,8 @@ const ChatBotPage: React.FC = () => {
                 },
 
                 onError: (error: string) => {
-                    console.error('Agent error:', error);
+                    console.error('❌ Agent error received:', error);
+                    console.log('🔄 State: Error occurred during processing');
                     setIsTyping(false);
                     // Only show error message if it's not a generic processing error and no results were received
                     if (!error.includes("Error processing request: 'output'") && !hasJobResults && !hasCareerAdvice) {
@@ -585,13 +929,44 @@ const ChatBotPage: React.FC = () => {
                         setMessages(prev => [...prev, errorMessage]);
                     } else if (!error.includes("Error processing request: 'output'")) {
                         // Ignoring backend processing error - job results already received
+                        console.log('⚠️ Ignoring backend processing error - results already received');
                     }
                 }
             });
 
+            console.log('✅ invokeAgent completed successfully');
+
+            // Summary of what happened in this request
+            console.log('📊 === REQUEST SUMMARY ===');
+            console.log('🎭 Orchestrator started:', orchestratorStarted);
+            console.log('🔍 Job search started:', jobSearchStarted);
+            console.log('💼 Career advice started:', careerAdviceStarted);
+            console.log('📋 Job results received:', hasJobResults);
+            console.log('🎓 Career advice received:', hasCareerAdvice);
+            console.log('🔄 Final state:', {
+                waitingForResponse,
+                waitingForCareerAdviceResult,
+                waitingForJobResult,
+                waitingForFinalResult
+            });
+
+            if (jobSearchStarted && hasJobResults) {
+                console.log('✅ Flow completed: Job search -> Job results');
+            } else if (careerAdviceStarted && hasCareerAdvice) {
+                console.log('✅ Flow completed: Career advice -> Career advice result -> Sources');
+            } else if (!jobSearchStarted && !careerAdviceStarted) {
+                console.log('✅ Flow completed: Orchestrator response (no specialized agents)');
+            }
 
         } catch (error) {
-            console.error('Error in handleSendMessage:', error);
+            console.error('❌ Error in handleSendMessage:', error);
+            console.log('📊 === REQUEST SUMMARY (ERROR) ===');
+            console.log('🎭 Orchestrator started:', orchestratorStarted);
+            console.log('🔍 Job search started:', jobSearchStarted);
+            console.log('💼 Career advice started:', careerAdviceStarted);
+            console.log('📋 Job results received:', hasJobResults);
+            console.log('🎓 Career advice received:', hasCareerAdvice);
+
             const errorMessage: Message = {
                 id: Date.now() + Math.random(),
                 text: "Sorry, I'm having trouble connecting right now. Please try again later.",
@@ -600,16 +975,24 @@ const ChatBotPage: React.FC = () => {
             };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
+            console.log('🧹 Finally block - cleaning up');
             setIsTyping(false);
-            setIsSpecialTyping(false);
             setIsProcessingComplete(true);
             setCurrentlyStreamingMessageId(null);
+            console.log('🧹 Set currentlyStreamingMessageId to null');
 
             // Clear any pending streaming timeout
             if (streamingTimeout) {
                 clearTimeout(streamingTimeout);
                 streamingTimeout = null;
             }
+
+            // Clear any pending states
+            setCurrentSources([]);
+            // Don't clear pendingCareerAdvice here - it will be cleared when sources are received
+            // or it will be kept for the next request if sources never arrive
+            console.log('🧹 Final cleanup - hasCareerAdvice:', hasCareerAdvice, 'pendingCareerAdvice exists:', !!pendingCareerAdvice);
+            console.log('🧹 Cleared streamingMessageId:', streamingMessageId);
         }
     };
 
@@ -715,6 +1098,31 @@ const ChatBotPage: React.FC = () => {
                                                     </ViewJobsButton>
                                                 </>
                                             )}
+                                            {message.sources && message.sources.length > 0 && (
+                                                <>
+                                                    <SourcesToggleButton
+                                                        onClick={() => toggleSources(message.id)}
+                                                    >
+                                                        📚 Sources ({message.sources.length})
+                                                        {expandedSources.has(message.id) ? ' ▲' : ' ▼'}
+                                                    </SourcesToggleButton>
+                                                    <SourcesContainer $isExpanded={expandedSources.has(message.id)}>
+                                                        <SourcesList>
+                                                            {message.sources.map((source, index) => (
+                                                                <SourceLink
+                                                                    key={index}
+                                                                    href={convertS3ToPublicUrl(source.url)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    title={source.url}
+                                                                >
+                                                                    {extractFilename(source.url)}
+                                                                </SourceLink>
+                                                            ))}
+                                                        </SourcesList>
+                                                    </SourcesContainer>
+                                                </>
+                                            )}
                                         </BotMessageBubble>
                                         <Timestamp>{formatTime(message.timestamp)}</Timestamp>
                                     </BotContentWrapper>
@@ -742,21 +1150,6 @@ const ChatBotPage: React.FC = () => {
                     </MessageContainer>
                 )}
                 
-                {isSpecialTyping && (
-                    <MessageContainer $isUser={false}>
-                        <BotMessageWrapper>
-                            <BotAvatarImage />
-                            <SpecialTypingIndicator>
-                                Let me help you with that
-                                <TypingDotsContainer>
-                                    <TypingDot />
-                                    <TypingDot />
-                                    <TypingDot />
-                                </TypingDotsContainer>
-                            </SpecialTypingIndicator>
-                        </BotMessageWrapper>
-                    </MessageContainer>
-                )}
 
             </ChatArea>
 
