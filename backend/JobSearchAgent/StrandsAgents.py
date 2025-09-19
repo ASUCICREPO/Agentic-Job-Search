@@ -477,8 +477,6 @@ async def handle_agent_request(payload):
             yield {"final_result": str(batch_result)}
             return
 
-        # Enhanced prompt is ready with session and email context
-
         # Stream the response from the orchestrator agent
         final_response = ""
         job_search_thinking_sent = False  # Flag to prevent duplicate thinking messages
@@ -540,16 +538,6 @@ async def handle_agent_request(payload):
                 # Error events
                 elif "error" in event:
                     yield {"error": event["error"]}
-
-        # Handle notification preferences after job search
-        if job_results_received and email:
-            try:
-                profile = get_student_profile(email)
-                if not profile or not profile.get('optInStatus', False):
-                    notification_msg = "Would you like daily notifications with job recommendations?"
-                    yield {"notification_prompt": notification_msg}
-            except Exception as e:
-                print(f"Error checking notification preferences: {e}")
 
         # Yield sources after career advice if career advice was provided
         if career_advice_result_sent:
