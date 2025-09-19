@@ -500,51 +500,57 @@ const ChatBotPage: React.FC = () => {
                                     <BotAvatarImage />
                                     <BotContentWrapper>
                                         <BotMessageBubble>
-                                            <ReactMarkdown
-                                                components={{
-                                                    p: ({children}) => <p style={{ margin: '8px 0', lineHeight: '1.4' }}>{children}</p>,
-                                                    strong: ({children}) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
-                                                    em: ({children}) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
-                                                    ul: ({children}) => <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>{children}</ul>,
-                                                    ol: ({children}) => <ol style={{ margin: '8px 0', paddingLeft: '20px' }}>{children}</ol>,
-                                                    li: ({children}) => <li style={{ margin: '4px 0' }}>{children}</li>,
-                                                    code: ({children}) => <code style={{
-                                                        backgroundColor: '#f4f4f4',
-                                                        padding: '2px 4px',
-                                                        borderRadius: '3px',
-                                                        fontFamily: 'monospace',
-                                                        fontSize: '0.9em'
-                                                    }}>{children}</code>,
-                                                    pre: ({children}) => <pre style={{
-                                                        backgroundColor: '#f4f4f4',
-                                                        padding: '12px',
-                                                        borderRadius: '6px',
-                                                        overflow: 'auto',
-                                                        fontSize: '0.9em',
-                                                        margin: '8px 0'
-                                                    }}>{children}</pre>,
-                                                    h1: ({children}) => <h1 style={{
-                                                        fontSize: '1.5em',
-                                                        fontWeight: 'bold',
-                                                        margin: '12px 0 8px 0',
-                                                        color: '#333'
-                                                    }}>{children}</h1>,
-                                                    h2: ({children}) => <h2 style={{
-                                                        fontSize: '1.3em',
-                                                        fontWeight: 'bold',
-                                                        margin: '10px 0 6px 0',
-                                                        color: '#333'
-                                                    }}>{children}</h2>,
-                                                    h3: ({children}) => <h3 style={{
-                                                        fontSize: '1.2em',
-                                                        fontWeight: 'bold',
-                                                        margin: '8px 0 4px 0',
-                                                        color: '#333'
-                                                    }}>{children}</h3>
-                                                }}
-                                            >
-                                                {message.text}
-                                            </ReactMarkdown>
+                                            {message.hasJobButton ? (
+                                                <p style={{ margin: '8px 0', lineHeight: '1.4', fontWeight: '500' }}>
+                                                    Here are your job results!
+                                                </p>
+                                            ) : (
+                                                <ReactMarkdown
+                                                    components={{
+                                                        p: ({children}) => <p style={{ margin: '8px 0', lineHeight: '1.4' }}>{children}</p>,
+                                                        strong: ({children}) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
+                                                        em: ({children}) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
+                                                        ul: ({children}) => <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>{children}</ul>,
+                                                        ol: ({children}) => <ol style={{ margin: '8px 0', paddingLeft: '20px' }}>{children}</ol>,
+                                                        li: ({children}) => <li style={{ margin: '4px 0' }}>{children}</li>,
+                                                        code: ({children}) => <code style={{
+                                                            backgroundColor: '#f4f4f4',
+                                                            padding: '2px 4px',
+                                                            borderRadius: '3px',
+                                                            fontFamily: 'monospace',
+                                                            fontSize: '0.9em'
+                                                        }}>{children}</code>,
+                                                        pre: ({children}) => <pre style={{
+                                                            backgroundColor: '#f4f4f4',
+                                                            padding: '12px',
+                                                            borderRadius: '6px',
+                                                            overflow: 'auto',
+                                                            fontSize: '0.9em',
+                                                            margin: '8px 0'
+                                                        }}>{children}</pre>,
+                                                        h1: ({children}) => <h1 style={{
+                                                            fontSize: '1.5em',
+                                                            fontWeight: 'bold',
+                                                            margin: '12px 0 8px 0',
+                                                            color: '#333'
+                                                        }}>{children}</h1>,
+                                                        h2: ({children}) => <h2 style={{
+                                                            fontSize: '1.3em',
+                                                            fontWeight: 'bold',
+                                                            margin: '10px 0 6px 0',
+                                                            color: '#333'
+                                                        }}>{children}</h2>,
+                                                        h3: ({children}) => <h3 style={{
+                                                            fontSize: '1.2em',
+                                                            fontWeight: 'bold',
+                                                            margin: '8px 0 4px 0',
+                                                            color: '#333'
+                                                        }}>{children}</h3>
+                                                    }}
+                                                >
+                                                    {message.text}
+                                                </ReactMarkdown>
+                                            )}
                                             {message.id === currentlyStreamingMessageId && (
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '8px' }}>
                                                     <TypingDot />
