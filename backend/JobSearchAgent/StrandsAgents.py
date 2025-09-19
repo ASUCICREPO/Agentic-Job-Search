@@ -388,7 +388,7 @@ class MultiAgentJobSearchSystem:
                 "• CALL each specialized agent only ONCE per query\n"
                 "• WAIT for the tool execution to complete\n"
                 "• If tool execution is successful and response looks good, provide brief acknowledgment\n"
-                "• Respond with: 'Job Search Agent replied' or 'Career Agent replied'\n"
+                "• Respond with: 'Here are the job results' or 'Career Agent replied'\n"
                 "• DO NOT pass through or return the full agent responses\n"
                 "• DO NOT interpret, modify, or reformat any responses from specialized agents\n"
                 "• The specialized agents handle all response formatting and user interaction directly\n"
@@ -397,7 +397,6 @@ class MultiAgentJobSearchSystem:
                 "• DO NOT add introductory text, explanations, or conclusions beyond the acknowledgment\n"
             )
         )
-
 
 async def handle_agent_request(payload):
     """
