@@ -388,7 +388,7 @@ class MultiAgentJobSearchSystem:
                 "• CALL each specialized agent only ONCE per query\n"
                 "• WAIT for the tool execution to complete\n"
                 "• If tool execution is successful and response looks good, provide brief acknowledgment\n"
-                "• Respond with: 'Job Search Agent replied' or 'Career Agent replied'\n"
+                "• Respond with: 'Here are the job results' or 'Career Agent replied'\n"
                 "• DO NOT pass through or return the full agent responses\n"
                 "• DO NOT interpret, modify, or reformat any responses from specialized agents\n"
                 "• The specialized agents handle all response formatting and user interaction directly\n"
@@ -397,7 +397,6 @@ class MultiAgentJobSearchSystem:
                 "• DO NOT add introductory text, explanations, or conclusions beyond the acknowledgment\n"
             )
         )
-
 
 async def handle_agent_request(payload):
     """
@@ -477,8 +476,6 @@ async def handle_agent_request(payload):
             yield {"final_result": str(batch_result)}
             return
 
-        # Enhanced prompt is ready with session and email context
-
         # Stream the response from the orchestrator agent
         final_response = ""
         job_search_thinking_sent = False  # Flag to prevent duplicate thinking messages
@@ -540,16 +537,6 @@ async def handle_agent_request(payload):
                 # Error events
                 elif "error" in event:
                     yield {"error": event["error"]}
-
-        # Handle notification preferences after job search
-        if job_results_received and email:
-            try:
-                profile = get_student_profile(email)
-                if not profile or not profile.get('optInStatus', False):
-                    notification_msg = "Would you like daily notifications with job recommendations?"
-                    yield {"notification_prompt": notification_msg}
-            except Exception as e:
-                print(f"Error checking notification preferences: {e}")
 
         # Yield sources after career advice if career advice was provided
         if career_advice_result_sent:

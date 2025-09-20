@@ -106,8 +106,7 @@ def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_
     This tool stores job recommendations with the following structure:
     - userJobKey: "email#job_category" (e.g., "john@gmail.com#software-engineer")
     - createdAt: ISO timestamp when recommendation was saved
-    - jobIds: Array of job IDs that were recommended (preferably 1 job per search)
-    - sentVia: How the recommendation was sent ("livesearch" or "batch")
+    - mandatory json format
     - sentToUser: Boolean indicating if notification was sent (auto-true for "livesearch")
 
     Args:
