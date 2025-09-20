@@ -136,7 +136,6 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'linkedin': parsed_data.get('linkedin', existing_item.get('linkedin', '')),
                 'optInStatus': parsed_data.get('optInStatus', existing_item.get('optInStatus', False)),
                 'communicationMethod': parsed_data.get('communicationMethod', existing_item.get('communicationMethod', '')),
-                'notificationMethod': event.get('notification_method', existing_item.get('notificationMethod', 'email')),
                     'timestamp': datetime.utcnow().isoformat()
                 }
 
