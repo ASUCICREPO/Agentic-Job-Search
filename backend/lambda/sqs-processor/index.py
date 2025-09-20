@@ -17,14 +17,14 @@ def lambda_handler(event, context):
             message = json.loads(record['body'])
             email = message.get('email')
             session_id = message.get('session_id')
-            notification_method = message.get('notification_method', 'email')
-            
+            communication_method = message.get('communication_method', 'email')
+
             if email and '@' in email:
                 payload = {
                     'prompt': 'Find me the latest job opportunities based on my profile and preferences. This is for daily job notifications.',
                     'email': email,
                     'session_id': session_id,
-                    'notification_method': notification_method
+                    'communication_method': communication_method
                 }
                 
                 client.invoke_agent(

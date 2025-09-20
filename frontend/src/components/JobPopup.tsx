@@ -457,58 +457,77 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
     // Only save profile if user actually changed any notification settings
     if (hasNotificationsChanged()) {
       const enabledJobs = Object.entries(jobNotifications).filter(([_, enabled]) => enabled);
+      const disabledJobs = Object.entries(jobNotifications).filter(([_, enabled]) => !enabled);
 
-      if (enabledJobs.length > 0) {
-        // Do this in background without blocking UI
-        (async () => {
-          try {
-            const userEmail = getUserEmail();
+      // Do this in background without blocking UI
+      (async () => {
+        try {
+          const userEmail = getUserEmail();
 
-            if (userEmail) {
-              // Get current profile data
-              const currentProfile = await getProfile(userEmail);
+          if (userEmail) {
+            // Get current profile data
+            const currentProfile = await getProfile(userEmail);
 
-              if (currentProfile) {
-                // Get the job titles for enabled notifications
-                const enabledJobTitles = enabledJobs.map(([jobId, _]) => {
-                  const job = jobs.find(j => j.id === jobId);
-                  return job?.title || '';
-                }).filter(title => title);
+            if (currentProfile) {
+              // Get the job titles for enabled notifications
+              const enabledJobTitles = enabledJobs.map(([jobId, _]) => {
+                const job = jobs.find(j => j.id === jobId);
+                return job?.title || '';
+              }).filter(title => title);
 
-                // Remove duplicates from enabled job titles first
-                const uniqueJobTitles = Array.from(new Set(enabledJobTitles));
+              // Get the job titles for disabled notifications
+              const disabledJobTitles = disabledJobs.map(([jobId, _]) => {
+                const job = jobs.find(j => j.id === jobId);
+                return job?.title || '';
+              }).filter(title => title);
 
-                // Merge existing preferred job roles with new enabled jobs and deduplicate
-                let existingRoles: string[] = [];
-                if (currentProfile.preferredJobRole && currentProfile.preferredJobRole.trim()) {
-                  existingRoles = currentProfile.preferredJobRole.split(',').map(role => role.trim());
-                }
+              // Remove duplicates from enabled job titles first
+              const uniqueEnabledJobTitles = Array.from(new Set(enabledJobTitles));
 
-                // Combine existing roles with new enabled job titles
-                const allRoles = [...existingRoles, ...uniqueJobTitles];
-
-                // Remove duplicates (case-insensitive)
-                const uniqueRoles = Array.from(new Set(
-                  allRoles.map(role => role.toLowerCase())
-                )).map(lowercaseRole =>
-                  allRoles.find(role => role.toLowerCase() === lowercaseRole) || lowercaseRole
-                );
-
-                const updatedProfile: ProfileData = {
-                  ...currentProfile,
-                  preferredJobRole: uniqueRoles.length > 0 ? uniqueRoles.join(', ') : currentProfile.preferredJobRole,
-                  optInStatus: true
-                };
-
-                // Save the updated profile in background
-                await saveProfile(updatedProfile);
+              // Get existing preferred job roles
+              let existingRoles: string[] = [];
+              if (currentProfile.preferredJobRole && currentProfile.preferredJobRole.trim()) {
+                existingRoles = currentProfile.preferredJobRole.split(',').map(role => role.trim());
               }
+
+              // Start with existing roles
+              let updatedRoles = [...existingRoles];
+
+              // Add new enabled job titles
+              uniqueEnabledJobTitles.forEach(title => {
+                if (!updatedRoles.some(role => role.toLowerCase() === title.toLowerCase())) {
+                  updatedRoles.push(title);
+                }
+              });
+
+              // Remove disabled job titles
+              disabledJobTitles.forEach(title => {
+                const index = updatedRoles.findIndex(role => role.toLowerCase() === title.toLowerCase());
+                if (index > -1) {
+                  updatedRoles.splice(index, 1);
+                }
+              });
+
+              // Remove duplicates (case-insensitive) and preserve original casing
+              const uniqueRoles = Array.from(new Set(
+                updatedRoles.map(role => role.toLowerCase())
+              )).map(lowercaseRole =>
+                updatedRoles.find(role => role.toLowerCase() === lowercaseRole) || lowercaseRole
+              );
+
+              const updatedProfile: ProfileData = {
+                ...currentProfile,
+                preferredJobRole: uniqueRoles.length > 0 ? uniqueRoles.join(', ') : ''
+              };
+
+              // Save the updated profile in background
+              await saveProfile(updatedProfile);
             }
-          } catch (error) {
-            // Profile update failed, but user doesn't need to know
           }
-        })();
-      }
+        } catch (error) {
+          console.error('Profile update failed:', error);
+        }
+      })();
     }
 
     // Close immediately without waiting
