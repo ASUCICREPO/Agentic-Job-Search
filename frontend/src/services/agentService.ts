@@ -32,6 +32,7 @@ interface StreamingCallbacks {
   onJobResults?: (jobs: any[], responseText: string) => void;
   onCareerAdvice?: (advice: string) => void;
   onResponse?: (response: string) => void;
+  onSources?: (sources: any[]) => void;
   onError?: (error: string) => void;
 }
 
@@ -125,6 +126,7 @@ export async function invokeAgent(
                   // Handle job results
                   if (data.job_agent_result && callbacks?.onJobResults) {
                     try {
+                      hasReceivedStreamingResponse = true;
                       let jobData: any[] = [];
                       let cleanJobResult = data.job_agent_result.trim();
 
@@ -146,7 +148,13 @@ export async function invokeAgent(
 
                   // Handle career advice results
                   if (data.carrier_advice_result && callbacks?.onCareerAdvice) {
+                    hasReceivedStreamingResponse = true;
                     callbacks.onCareerAdvice(data.carrier_advice_result);
+                  }
+
+                  // Handle sources
+                  if (data.sources && callbacks?.onSources) {
+                    callbacks.onSources(data.sources);
                   }
 
                   // Handle regular response

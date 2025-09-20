@@ -21,18 +21,22 @@ def lambda_handler(event, context):
         
         sent_count = 0
         for item in response['Items']:
-            notification_method = item.get('notificationMethod', 'email')
-            
-            if notification_method == 'email':
-                email = item.get('email')
-                if email and '@' in email:
-                    send_email_notification(email)
-                    sent_count += 1
-            elif notification_method == 'phone':
-                phone = item.get('phone')
-                if phone:
-                    send_sms_notification(phone)
-                    sent_count += 1
+            communication_method = item.get('communicationMethod', 'email')
+
+            # Handle multiple communication methods (comma-separated)
+            methods = [method.strip() for method in communication_method.split(',') if method.strip()]
+
+            for method in methods:
+                if method == 'email':
+                    email = item.get('email')
+                    if email and '@' in email:
+                        send_email_notification(email)
+                        sent_count += 1
+                elif method == 'phone':
+                    phone = item.get('phone')
+                    if phone:
+                        send_sms_notification(phone)
+                        sent_count += 1
         
         return {
             'statusCode': 200,
