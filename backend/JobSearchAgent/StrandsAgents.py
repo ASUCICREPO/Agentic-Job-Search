@@ -172,6 +172,55 @@ def _get_memory_tools(session_id: str = "", email: str = ""):
         return []
 
 
+def _get_session_history(session_id: str = "", email: str = "", max_turns: int = 5):
+    """
+    Retrieve short-term memory (conversation history) for the current session.
+    
+    Args:
+        session_id: Session identifier
+        email: User email for actor_id
+        max_turns: Maximum number of recent conversation turns to retrieve
+    
+    Returns:
+        Formatted conversation history string or empty string if none found
+    """
+    
+    # Create sanitized actor_id
+    if email:
+        actor_id = sanitize_email_for_actor_id(email)
+    elif session_id:
+        actor_id = f"user_{session_id}"
+    else:
+        return ""
+    
+    try:
+        memory_client = MemoryClient(region_name=AWS_REGION)
+        recent_turns = memory_client.get_last_k_turns(
+            memory_id=AGENTCORE_MEMORY_ID,
+            actor_id=actor_id,
+            session_id=session_id,
+            k=max_turns,
+            branch_name="main"
+        )
+        
+        if recent_turns:
+            # Format conversation history for context
+            context_messages = []
+            for turn in recent_turns:
+                for message in turn:
+                    role = message['role'].lower()
+                    content = message['content']['text']
+                    context_messages.append(f"{role.title()}: {content}")
+            
+            return "\n".join(context_messages)
+        else:
+            return ""
+        
+    except Exception as e:
+        print(f"Failed to retrieve session history: {e}")
+        return ""
+
+
 def _create_memory_event(role: str, content: str, session_id: str = "", email: str = ""):
     """
     Create memory event in Bedrock AgentCore for conversation tracking.
@@ -236,15 +285,19 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
             system_prompt = _get_batch_job_search_prompt()
         else:  # livesearch
             system_prompt = _get_live_job_search_prompt()
+            # Add conversation history for livesearch only
+            conversation_history = _get_session_history(session_id, email)
+            if conversation_history:
+                system_prompt += f"\n\nRecent conversation history:\n{conversation_history}\n\nContinue the conversation naturally based on this context."
 
-        # Create a specialized job search agent
+        # Create a specialized job search agent with updated system prompt
         job_search_agent = Agent(
             tools=tools,
             model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
             system_prompt=system_prompt
         )
 
-        # Add session context if available
+        # Add session context
         enhanced_query = query
         context_info = []
         if session_id:
@@ -455,8 +508,12 @@ async def handle_agent_request(payload):
         # Initialize the multi-agent orchestrator system with memory support
         orchestrator_system = MultiAgentJobSearchSystem(session_id=session_id, email=email, source=source)
 
-        # Create memory event for user message
-        _create_memory_event("USER", prompt, session_id, email)
+        # Store user message in memory before processing
+        if session_id or email:
+            _create_memory_event("USER", prompt, session_id, email)
+            # Small delay to ensure memory is stored before retrieval
+            import time
+            time.sleep(0.1)
 
         # Process the prompt with context information
         enhanced_prompt = prompt
@@ -470,6 +527,13 @@ async def handle_agent_request(payload):
         context_parts.append(f"Source: {source}")
 
         enhanced_prompt = f"[Context: {' | '.join(context_parts)}]\n{prompt}"
+
+        # For livesearch, add conversation history to orchestrator system prompt
+        if source == "livesearch":
+            conversation_history = _get_session_history(session_id, email)
+            if conversation_history:
+                # Add conversation history to orchestrator's system prompt
+                orchestrator_system.orchestrator_agent.system_prompt += f"\n\nRecent conversation history:\n{conversation_history}\n\nContinue the conversation naturally based on this context."
 
         # Check if source is "batch" - if so, directly call job_search_agent_tool
         if source == "batch":
@@ -558,9 +622,10 @@ async def handle_agent_request(payload):
             if top_sources:
                 yield {"sources": top_sources}
 
-        # Create memory event for assistant response
+        # Store assistant response in memory and yield final result
         if final_response:
-            _create_memory_event("ASSISTANT", final_response, session_id, email)
+            if session_id or email:
+                _create_memory_event("ASSISTANT", final_response, session_id, email)
             yield {"final_result": final_response}
 
     except Exception as e:
