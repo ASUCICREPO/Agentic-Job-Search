@@ -1,11 +1,28 @@
-FROM public.ecr.aws/lambda/python:3.11
+FROM public.ecr.aws/lambda/python:3.12
 
-# Copy requirements and install dependencies
-COPY requirements.txt ${LAMBDA_TASK_ROOT}
-RUN pip install -r requirements.txt
+# Set environment variable for Lambda Task Root (optional but recommended)
+ENV LAMBDA_TASK_ROOT=/asset
 
-# Copy function code
-COPY index.py ${LAMBDA_TASK_ROOT}
+# Create /asset directory if it doesn't exist
+RUN mkdir -p /asset
 
-# Set the CMD to your handler
+# Copy function code to the /asset directory
+COPY index.py /asset/
+
+# Copy requirements.txt to /tmp directory
+COPY requirements.txt /tmp/
+
+# Upgrade pip to the latest version
+RUN pip3 install --upgrade pip
+
+# Install dependencies into /asset
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt -t /asset/
+
+# (Optional) Clean up /tmp to reduce image size
+RUN rm -rf /tmp/*
+
+# Set the working directory to /asset
+WORKDIR /asset
+
+# Specify the Lambda handler
 CMD ["index.lambda_handler"]

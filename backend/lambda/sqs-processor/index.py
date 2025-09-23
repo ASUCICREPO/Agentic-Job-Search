@@ -27,7 +27,6 @@ def lambda_handler(event, context):
     """SQS triggered processor - processes individual job notification requests using Bedrock AgentCore"""
     
     # Get environment variables
-    region = os.environ.get('AWS_REGION', 'us-west-2')
     runtime_arn = os.environ.get('BEDROCK_AGENTCORE_RUNTIME_ARN')
     qualifier = os.environ.get('BEDROCK_AGENTCORE_QUALIFIER', 'DEFAULT')
     
@@ -36,7 +35,7 @@ def lambda_handler(event, context):
         raise ValueError("Missing BEDROCK_AGENTCORE_RUNTIME_ARN configuration")
     
     # Initialize Bedrock AgentCore client
-    client = boto3.client('bedrock-agentcore', region_name=region)
+    client = boto3.client('bedrock-agentcore')
     
     processed_count = 0
     failed_count = 0
@@ -46,7 +45,6 @@ def lambda_handler(event, context):
             message = json.loads(record['body'])
             email = message.get('email')
             session_id = message.get('session_id')
-            communication_method = message.get('communication_method', 'email')
             user_profile = message.get('user_profile', {})
             source = message.get('source', 'batch')
             
@@ -73,7 +71,6 @@ User Details:
 - Headline/Title: {user_profile.get('headline', 'Not provided')}
 - Education: {user_profile.get('education', 'Not provided')}
 - Experience: {user_profile.get('experience', 'Not provided')}
-- Communication Method: {communication_method}
 - Processing Type: {source}
 
 Task: Search for relevant job opportunities based on the user's detailed profile above. This is for daily job recommendations that will be saved to the database for later notification delivery.
