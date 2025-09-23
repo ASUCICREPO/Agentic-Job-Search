@@ -8,11 +8,26 @@ export function getOrCreateSessionId(): string {
   // Check if we already have a session ID in sessionStorage
   let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
 
+  // Check if existing session ID is too short (for backward compatibility)
+  if (sessionId && sessionId.length < 33) {
+    sessionId = null; // Force regeneration
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  }
+
   if (!sessionId) {
     // Generate a new session ID if one doesn't exist
     const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substr(2, 16);
-    sessionId = `session_${timestamp}_${randomString}`;
+    // Generate a longer random string to ensure we meet the 33 character minimum
+    const randomString1 = Math.random().toString(36).substr(2, 16);
+    const randomString2 = Math.random().toString(36).substr(2, 8);
+    sessionId = `session_${timestamp}_${randomString1}${randomString2}`;
+
+    // Ensure the session ID meets the minimum length requirement
+    if (sessionId.length < 33) {
+      // Add more random characters if needed
+      const additionalRandom = Math.random().toString(36).substr(2);
+      sessionId += additionalRandom.substr(0, 33 - sessionId.length);
+    }
 
     // Store it in sessionStorage so it persists across page interactions
     sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId);
