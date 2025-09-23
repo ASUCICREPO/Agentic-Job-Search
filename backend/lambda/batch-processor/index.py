@@ -78,9 +78,7 @@ def process_batch():
         for item in response['Items']:
             action_id = item.get('actionID')
             email = item.get('email')
-            communication_method = item.get('communicationMethod', 'email')
             
-            # ENHANCEMENT: Extract comprehensive user profile for personalized job matching
             # This data is passed to the SQS processor and then to AgentCore for better job recommendations
             user_profile = {
                 'fullName': item.get('fullName', ''),
@@ -89,8 +87,6 @@ def process_batch():
                 'preferredJobRole': item.get('preferredJobRole', ''),
                 'education': item.get('education', ''),
                 'experience': item.get('experience', ''),
-                'phone': item.get('phone', ''),
-                'linkedin': item.get('linkedin', '')
             }
             
             if email and '@' in email:
@@ -103,7 +99,6 @@ def process_batch():
                         'email': email,
                         'action_id': action_id,
                         'session_id': session_id,
-                        'communication_method': communication_method,
                         'user_profile': user_profile,  # Include full user profile for better job matching
                         'source': 'batch'  # Important: indicates this is batch processing
                     })
