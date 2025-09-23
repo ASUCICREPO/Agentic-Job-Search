@@ -24,16 +24,16 @@ export class jobsearch1 extends cdk.Stack {
     // basic information retrieval before writing resources
     // Admin email for SES sender identity
     const adminEmail = this.node.tryGetContext('adminEmail');
-    if(!adminEmail)
+    if (!adminEmail)
       throw new Error("Missing required context variable: adminEmail. Please provide 'adminEmail' in CDK context (e.g., cdk deploy -c adminEmail=your@email.com)");
 
     const aws_region = cdk.Stack.of(this).region;
     const accountId = cdk.Stack.of(this).account;
     console.log(`AWS Region: ${aws_region}`);
 
-    const hostArchitecture = os.arch(); 
+    const hostArchitecture = os.arch();
     console.log(`Host architecture: ${hostArchitecture}`);
-    
+
     const lambdaArchitecture = hostArchitecture === 'arm64' ? lambda.Architecture.ARM_64 : lambda.Architecture.X86_64;
     console.log(`Lambda architecture: ${lambdaArchitecture}`);
 
@@ -44,7 +44,7 @@ export class jobsearch1 extends cdk.Stack {
 
     const JobsBucket = new s3.Bucket(this, 'JobsBucket', {
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN, 
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     const ResumeBucket = new s3.Bucket(this, 'ResumeBucket', {
@@ -78,7 +78,7 @@ export class jobsearch1 extends cdk.Stack {
       },
       removalPolicy: cdk.RemovalPolicy.DESTROY, // for production have retain
     });
-        
+
     // Export the table name for reference
     new cdk.CfnOutput(this, 'StudentProfileTableOutput', {
       value: StudentProfileTable.tableName,
@@ -92,7 +92,7 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'save-profile')),
       environment: {
-      STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
+        STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
       },
       architecture: lambdaArchitecture,
     });
@@ -102,7 +102,7 @@ export class jobsearch1 extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
         allowedOrigins: ['*'],
-        allowedMethods: [lambda.HttpMethod.POST,lambda.HttpMethod.GET],
+        allowedMethods: [lambda.HttpMethod.POST, lambda.HttpMethod.GET],
         allowedHeaders: ['Content-Type']
       }
     });
@@ -153,21 +153,91 @@ export class jobsearch1 extends cdk.Stack {
     });
 
 
-    // Build Docker image and push to ECR as part of CDK deployment
-    const jobSearchAgentImage = new ecrAssets.DockerImageAsset(this, 'JobSearchAgentImage', {
-      directory: path.join(__dirname, '..', 'JobSearchAgent'),
-      platform: lambdaArchitecture === lambda.Architecture.ARM_64 
-        ? ecrAssets.Platform.LINUX_ARM64 
-        : ecrAssets.Platform.LINUX_AMD64,
-    });
+    // Skip Docker image build for faster deployment - use existing image
+    // const jobSearchAgentImage = new ecrAssets.DockerImageAsset(this, 'JobSearchAgentImage', {
+    //   directory: path.join(__dirname, '..', 'JobSearchAgent'),
+    //   platform: lambdaArchitecture === lambda.Architecture.ARM_64
+    //     ? ecrAssets.Platform.LINUX_ARM64
+    //     : ecrAssets.Platform.LINUX_AMD64,
+    // });
 
     new bedrock.S3DataSource(this, 'JobDataSource', {
       bucket: JobsBucket,
       knowledgeBase: kb,
       contextEnrichment: ContextEnrichment.foundationModel({
-    enrichmentModel: bedrock.BedrockFoundationModel.ANTHROPIC_CLAUDE_HAIKU_V1_0,
-        }),
+        enrichmentModel: bedrock.BedrockFoundationModel.ANTHROPIC_CLAUDE_HAIKU_V1_0,
+      }),
     });
+
+    // ENHANCEMENT: Create IAM role for AgentCore with DynamoDB permissions
+    // This role allows the Bedrock AgentCore to access DynamoDB tables for saving job recommendations
+    // Fixed issue: Replaced non-existent AmazonBedrockExecutionRolePolicy with custom inline policy
+    const agentCoreRole = new iam.Role(this, 'AgentCoreExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('bedrock.amazonaws.com'),
+      description: 'IAM role for Bedrock AgentCore to access DynamoDB and other resources',
+      inlinePolicies: {
+        BedrockExecutionPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents'
+              ],
+              resources: ['arn:aws:logs:*:*:*']
+            })
+          ]
+        })
+      }
+    });
+
+    // ENHANCEMENT: Grant AgentCore permissions to access DynamoDB tables
+    // This allows the job search agent to read user profiles and save job recommendations
+    StudentProfileTable.grantReadWriteData(agentCoreRole);
+    JobRecommendationsTable.grantReadWriteData(agentCoreRole);
+
+    // ENHANCEMENT: Grant AgentCore permissions to access Knowledge Base and S3
+    // This allows the agent to retrieve job data from the knowledge base
+    JobsBucket.grantRead(agentCoreRole);
+
+    // Grant AgentCore permissions to invoke Bedrock models
+    agentCoreRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'bedrock:InvokeModel',
+        'bedrock:InvokeModelWithResponseStream',
+        'bedrock:RetrieveAndGenerate',
+        'bedrock:Retrieve'
+      ],
+      resources: ['*']
+    }));
+
+    // Grant AgentCore permissions for memory operations
+    agentCoreRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'bedrock:CreateMemory',
+        'bedrock:GetMemory',
+        'bedrock:UpdateMemory',
+        'bedrock:DeleteMemory',
+        'bedrock:ListMemories'
+      ],
+      resources: ['*']
+    }));
+
+    // Grant AgentCore permissions to access S3 for knowledge base
+    agentCoreRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        's3:GetObject',
+        's3:ListBucket'
+      ],
+      resources: [
+        JobsBucket.bucketArn,
+        `${JobsBucket.bucketArn}/*`
+      ]
+    }));
 
     // SQS Queue for job notifications
     const jobNotificationQueue = new sqs.Queue(this, 'JobNotificationQueue', {
@@ -182,7 +252,9 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
+        // ENHANCEMENT: Updated environment variable name for consistency
+        // Changed from DYNAMODB_TABLE_NAME to STUDENT_PROFILE_TABLE_NAME for clarity
+        STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
         JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
         SQS_QUEUE_URL: jobNotificationQueue.queueUrl,
       },
@@ -209,23 +281,31 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        BEDROCK_AGENT_ID: 'your-agent-id', // TODO: Replace with actual agent ID
-        BEDROCK_AGENT_ALIAS_ID: 'your-agent-alias-id', // TODO: Replace with actual agent alias ID
+        // ENHANCEMENT: Added comprehensive environment variables for SQS processor
+        // These allow the SQS processor to communicate with AgentCore and access DynamoDB
+        BEDROCK_AGENTCORE_RUNTIME_ARN: this.node.tryGetContext('agentCoreRuntimeArn') || 'arn:aws:bedrock-agentcore:us-west-2:216989103356:runtime/JOBSEARCHAGENT-LWmC1147BA',
+        BEDROCK_AGENTCORE_QUALIFIER: 'DEFAULT',
+        STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
+        JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
+        JOB_SEARCH_KB: kb.knowledgeBaseId,
+        AGENTCORE_MEMORY_ID: this.node.tryGetContext('agentCoreMemoryId') || 'JobSearchShortTermMemory-yZlDFAGwUg',
+        AGENTCORE_USER_PREFERENCE_STRATEGY_ID: this.node.tryGetContext('agentCoreUserPreferenceStrategyId') || 'memory_preference_m405m-1Ogny2Cri1',
+        // NOTE: AWS_REGION is automatically provided by Lambda runtime, so not included here
       },
     });
 
-    // Grant permissions for SQS processor
+    // ENHANCEMENT: Grant permissions for SQS processor to invoke AgentCore
+    // Changed from 'bedrock:InvokeAgent' to 'bedrock-agentcore:InvokeAgentRuntime' for AgentCore compatibility
     sqsProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['bedrock:InvokeAgent'],
+      actions: ['bedrock-agentcore:InvokeAgentRuntime'],
       resources: ['*'],
     }));
 
-    sqsProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['ses:SendEmail'],
-      resources: ['*'],
-    }));
+    // ENHANCEMENT: Grant SQS processor access to DynamoDB tables
+    // This allows the processor to pass context to AgentCore and verify user profiles
+    StudentProfileTable.grantReadData(sqsProcessorLambda);
+    JobRecommendationsTable.grantReadWriteData(sqsProcessorLambda);
 
     // Configure SQS as event source for the processor lambda
     sqsProcessorLambda.addEventSource(new SqsEventSource(jobNotificationQueue, {
@@ -256,7 +336,7 @@ export class jobsearch1 extends cdk.Stack {
     StudentProfileTable.grantReadData(notificationSenderLambda);
     JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
     smsNotificationTopic.grantPublish(notificationSenderLambda);
-    
+
     notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['ses:SendEmail', 'ses:SendRawEmail'],
@@ -275,13 +355,14 @@ export class jobsearch1 extends cdk.Stack {
       description: 'Send daily notifications at 9 AM MST',
     });
 
-    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda)); 
-    
-    new cdk.CfnOutput(this, 'DockerImageURI', {
-      value: jobSearchAgentImage.imageUri,
-      description: 'Built Docker Image URI (CDK-managed ECR)',
-      exportName: 'JobSearchAgentImageURI',
-    });
+    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda));
+
+    // Skip Docker image output for faster deployment
+    // new cdk.CfnOutput(this, 'DockerImageURI', {
+    //   value: jobSearchAgentImage.imageUri,
+    //   description: 'Built Docker Image URI (CDK-managed ECR)',
+    //   exportName: 'JobSearchAgentImageURI',
+    // });
 
     new cdk.CfnOutput(this, 'KnowledgeBaseId', {
       value: kb.knowledgeBaseId,
@@ -296,23 +377,35 @@ export class jobsearch1 extends cdk.Stack {
       exportName: 'JobRecommendationsTableName',
     });
 
-  new cdk.CfnOutput(this, 'ResumeBucketName', {
-    value: ResumeBucket.bucketName,
-    description: 'S3 bucket for storing user resumes',
-    exportName: 'ResumeBucketName',
-  });
+    new cdk.CfnOutput(this, 'ResumeBucketName', {
+      value: ResumeBucket.bucketName,
+      description: 'S3 bucket for storing user resumes',
+      exportName: 'ResumeBucketName',
+    });
 
-  new cdk.CfnOutput(this, 'SaveProfileUrl', {
-    value: saveProfileUrl.url,
-    description: 'Lambda Function URL for save profile endpoint',
-    exportName: 'SaveProfileUrl',
-  });
+    new cdk.CfnOutput(this, 'SaveProfileUrl', {
+      value: saveProfileUrl.url,
+      description: 'Lambda Function URL for save profile endpoint',
+      exportName: 'SaveProfileUrl',
+    });
 
-  new cdk.CfnOutput(this, 'ResumeProcessorUrl', {
-    value: resumeProcessorUrl.url,
-    description: 'Lambda Function URL for resume parser endpoint',
-    exportName: 'ResumeProcessorUrl',
-  });
+    new cdk.CfnOutput(this, 'ResumeProcessorUrl', {
+      value: resumeProcessorUrl.url,
+      description: 'Lambda Function URL for resume parser endpoint',
+      exportName: 'ResumeProcessorUrl',
+    });
+
+    new cdk.CfnOutput(this, 'AgentCoreRoleArn', {
+      value: agentCoreRole.roleArn,
+      description: 'IAM Role ARN for Bedrock AgentCore with DynamoDB permissions',
+      exportName: 'AgentCoreRoleArn',
+    });
+
+    new cdk.CfnOutput(this, 'SQSQueueUrl', {
+      value: jobNotificationQueue.queueUrl,
+      description: 'SQS Queue URL for job notifications',
+      exportName: 'SQSQueueUrl',
+    });
 
   }
 }

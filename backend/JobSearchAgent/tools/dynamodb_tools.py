@@ -99,7 +99,7 @@ def get_student_profile(email: str) -> Dict[str, Any]:
         }
 
 @tool
-def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_via: str = "livesearch") -> Dict[str, Any]:
+def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_via: str = "livesearch", job_details: list = None) -> Dict[str, Any]:
     """
     Save job recommendations for a user in DynamoDB.
 
@@ -114,6 +114,7 @@ def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_
         job_category: Job category/type (e.g., "software-engineer", "data-scientist")
         job_ids: List of job IDs that were recommended (preferably 1 job)
         sent_via: How the recommendation was sent ("livesearch" or "batch", default: "livesearch")
+        job_details: Optional list of job detail objects with additional information
 
     Returns:
         Status information about the database operation
@@ -163,6 +164,10 @@ def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_
             'sentVia': sent_via,
             'sentToUser': sent_to_user
         }
+        
+        # Add job details if provided (useful for batch processing)
+        if job_details and isinstance(job_details, list):
+            item['jobDetails'] = job_details
 
         # Put item in DynamoDB
         table.put_item(Item=item)
