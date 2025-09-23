@@ -99,22 +99,19 @@ def get_student_profile(email: str) -> Dict[str, Any]:
         }
 
 @tool
-def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_via: str = "livesearch", job_details: list = None) -> Dict[str, Any]:
+def save_job_recommendations(email: str, job_category: str, jobInformation: list) -> Dict[str, Any]:
     """
     Save job recommendations for a user in DynamoDB.
 
     This tool stores job recommendations with the following structure:
     - userJobKey: "email#job_category" (e.g., "john@gmail.com#software-engineer")
     - createdAt: ISO timestamp when recommendation was saved
-    - mandatory json format
-    - sentToUser: Boolean indicating if notification was sent (auto-true for "livesearch")
+    - jobInformation: List of structured job data objects
 
     Args:
         email: User's email address
         job_category: Job category/type (e.g., "software-engineer", "data-scientist")
-        job_ids: List of job IDs that were recommended (preferably 1 job)
-        sent_via: How the recommendation was sent ("livesearch" or "batch", default: "livesearch")
-        job_details: Optional list of job detail objects with additional information
+        jobInformation: List of job information objects containing structured job data
 
     Returns:
         Status information about the database operation
@@ -127,17 +124,10 @@ def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_
                 "message": "Email and job category are required"
             }
 
-        if not job_ids or not isinstance(job_ids, list):
+        if not jobInformation or not isinstance(jobInformation, list):
             return {
                 "success": False,
-                "message": "Job IDs must be provided as a non-empty list"
-            }
-
-        # Validate sent_via parameter
-        if sent_via not in ["livesearch", "batch"]:
-            return {
-                "success": False,
-                "message": "sent_via must be either 'livesearch' or 'batch'"
+                "message": "Job information must be provided as a non-empty list"
             }
 
         # Initialize DynamoDB client
@@ -151,23 +141,15 @@ def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_
         from datetime import datetime
         created_at = datetime.utcnow().isoformat() + 'Z'  # ISO format with Z suffix
 
-        # Automatically set sentToUser based on sentVia
-        sent_to_user = sent_via == "livesearch"
-
         # Prepare item for DynamoDB
         item = {
             'userJobKey': user_job_key,
             'createdAt': created_at,
             'email': email,
             'jobCategory': job_category,
-            'jobIds': job_ids,
-            'sentVia': sent_via,
-            'sentToUser': sent_to_user
+            'jobInformation': jobInformation,
+            'sentToUser': False  # Always false for batch processing
         }
-        
-        # Add job details if provided (useful for batch processing)
-        if job_details and isinstance(job_details, list):
-            item['jobDetails'] = job_details
 
         # Put item in DynamoDB
         table.put_item(Item=item)
@@ -177,9 +159,8 @@ def save_job_recommendations(email: str, job_category: str, job_ids: list, sent_
             "message": f"Job recommendations saved successfully for {email}",
             "userJobKey": user_job_key,
             "createdAt": created_at,
-            "jobIds": job_ids,
-            "sentVia": sent_via,
-            "sentToUser": sent_to_user
+            "jobInformation": jobInformation,
+            "sentToUser": False
         }
 
     except Exception as e:
