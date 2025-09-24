@@ -439,6 +439,7 @@ class MultiAgentJobSearchSystem:
                 "   • CAREER ADVICE: Questions about career development, skills, guidance → Use career advice workflow\n"
                 "2) For ambiguous queries, ask for clarification rather than assuming intent\n\n"
                 "GREETING AND CASUAL INTERACTION RESPONSES:\n"
+                "• FIRST check RECENT conversation history for immediate context - if user just had an ongoing conversation about job search/career advice, continue that conversation rather than resetting to generic greeting\n"
                 "• Respond warmly to greetings: 'Hello! I'm here to help you with job searches and career advice. What can I assist you with today?'\n"
                 "• For casual conversation, respond naturally without using tools\n"
                 "• Only mention available services (job search, career advice) when appropriate\n"
@@ -449,11 +450,11 @@ class MultiAgentJobSearchSystem:
                 "3) Identify what key details are missing based on previous context (major, skills, industry, location, etc.)\n"
                 "4) ONLY respond with follow-up questions when the query is truly generic and needs clarification\n"
                 "PERSONALIZED JOB SEARCH WORKFLOW - ONLY FOR EXPLICIT JOB SEARCH REQUESTS:\n"
-                "1) Retrieve current preferences using get_student_profile and memory and confirm with user if they are up to date and if you should start the job search\n"
-                "2) If query is too generic, use conversation history to ask targeted follow-up questions:\n"
-                "   • Ask about specific field/industry, skills, location, salary expectations, etc.\n"
-                "4) Enrich job search query with user's profile (skills, experience, locations, salary expectations)\n"
-                "5) Call job_search_agent_tool with enhanced query and source parameter\n\n"
+                "1) Retrieve profile preferences using get_student_profile and memory tools\n"
+                "2) Ask about specific preferences(exact city/location, sponsorship needed, job type, company size, remote vs onsite, etc.), ensure profile completeness, confirm with user before proceeding to showcase job results\n"
+                "   - For confirming with user: Share what you found via profile and memory tools, mention the specific questions you should ask based on the above point (if any), and ask if they would like to change any preferences before proceeding with job search\n"
+                "3) Enrich job search query with user's profile (skills, experience, locations, salary expectations)\n"
+                "4) Call job_search_agent_tool with enhanced query and source parameter\n\n"
                 "QUERY SPECIFICITY GUIDANCE:\n"
                 "• Good queries: 'Find me data analyst jobs in Phoenix using my Python and SQL skills'\n"
                 "• Generic queries: 'What jobs can I get?' → Ask: 'What field interests you most within your major?'\n"
@@ -573,70 +574,97 @@ async def handle_agent_request(payload):
         job_results_received = False  # Track if job results were received
         career_advice_result_sent = False  # Track if career advice result was sent
 
-        async for event in orchestrator_system.orchestrator_agent.stream_async(enhanced_prompt):
+        try:
+            async for event in orchestrator_system.orchestrator_agent.stream_async(enhanced_prompt):
+                try:
+                    # Real-time text generation (thinking process)
+                    if "data" in event:
+                        yield {"thinking": event["data"]}
 
-                # Real-time text generation (thinking process)
-                if "data" in event:
-                    yield {"thinking": event["data"]}
+                    # Complete formatted responses and tool results
+                    elif "message" in event and isinstance(event["message"], dict):
+                        message = event["message"]
+                        if "content" in message:
+                            for content in message["content"]:
+                                if "text" in content:
+                                    yield {"response": content["text"]}
+                                    # Keep track of the final complete response
+                                    final_response = content["text"]
+                                elif "toolResult" in content:
+                                    tool_result = content["toolResult"]
+                                    # Only send job_agent_result if job search was initiated
+                                    if job_search_started and "content" in tool_result:
+                                        for result_content in tool_result["content"]:
+                                            if "text" in result_content:
+                                                yield {"job_agent_result": result_content["text"]}
+                                                final_response = result_content["text"]
+                                                job_results_received = True
+                                    # Only send carrier_advice_result if career advice was initiated
+                                    elif carrier_advice_started and "content" in tool_result:
+                                        for result_content in tool_result["content"]:
+                                            if "text" in result_content:
+                                                yield {"carrier_advice_result": result_content["text"]}
+                                                final_response = result_content["text"]
+                                                career_advice_result_sent = True
 
-                # Complete formatted responses and tool results
-                elif "message" in event and isinstance(event["message"], dict):
-                    message = event["message"]
-                    if "content" in message:
-                        for content in message["content"]:
-                            if "text" in content:
-                                yield {"response": content["text"]}
-                                # Keep track of the final complete response
-                                final_response = content["text"]
-                            elif "toolResult" in content:
-                                tool_result = content["toolResult"]
-                                # Only send job_agent_result if job search was initiated
-                                if job_search_started and "content" in tool_result:
-                                    for result_content in tool_result["content"]:
-                                        if "text" in result_content:
-                                            yield {"job_agent_result": result_content["text"]}
-                                            final_response = result_content["text"]
-                                            job_results_received = True
-                                # Only send carrier_advice_result if career advice was initiated
-                                elif carrier_advice_started and "content" in tool_result:
-                                    for result_content in tool_result["content"]:
-                                        if "text" in result_content:
-                                            yield {"carrier_advice_result": result_content["text"]}
-                                            final_response = result_content["text"]
-                                            career_advice_result_sent = True
+                    # Tool usage information - show the streaming tool input being built
+                    elif "current_tool_use" in event:
+                        tool_info = event["current_tool_use"]
+                        if "name" in tool_info:
+                            # Special thinking message for job search agent (send only once)
+                            if tool_info["name"] == "job_search_agent_tool" and not job_search_thinking_sent:
+                                yield {"thinking": "🔍 Searching for relevant job opportunities based on your preferences..."}
+                                yield {"job_search_started": True}
+                                job_search_started = True  # Track that job search was initiated
+                                job_search_thinking_sent = True  # Set flag to prevent duplicate messages
+                            # Special thinking message for career advice agent (send only once)
+                            elif tool_info["name"] == "career_advice_agent_tool" and not carrier_advice_thinking_sent:
+                                yield {"thinking": "💼 Providing career guidance and advice..."}
+                                yield {"carrier_advice_started": True}
+                                carrier_advice_started = True  # Track that career advice was initiated
+                                carrier_advice_thinking_sent = True  # Set flag to prevent duplicate messages
 
-                # Tool usage information - show the streaming tool input being built
-                elif "current_tool_use" in event:
-                    tool_info = event["current_tool_use"]
-                    if "name" in tool_info:
-                        # Special thinking message for job search agent (send only once)
-                        if tool_info["name"] == "job_search_agent_tool" and not job_search_thinking_sent:
-                            yield {"thinking": "🔍 Searching for relevant job opportunities based on your preferences..."}
-                            yield {"job_search_started": True}
-                            job_search_started = True  # Track that job search was initiated
-                            job_search_thinking_sent = True  # Set flag to prevent duplicate messages
-                        # Special thinking message for career advice agent (send only once)
-                        elif tool_info["name"] == "career_advice_agent_tool" and not carrier_advice_thinking_sent:
-                            yield {"thinking": "💼 Providing career guidance and advice..."}
-                            yield {"carrier_advice_started": True}
-                            carrier_advice_started = True  # Track that career advice was initiated
-                            carrier_advice_thinking_sent = True  # Set flag to prevent duplicate messages
-
-                # Error events
-                elif "error" in event:
-                    yield {"error": event["error"]}
+                    # Error events
+                    elif "error" in event:
+                        yield {"error": event["error"]}
+                    
+                    # Handle any unknown event types gracefully (prevents KeyError crashes)
+                    else:
+                        # Log unknown event types for debugging but don't crash
+                        print(f"[DEBUG] Unknown streaming event received: {list(event.keys())}")
+                        # Don't yield unknown events to prevent frontend issues
+                        
+                except Exception as stream_event_error:
+                    # Catch any errors in processing individual streaming events
+                    print(f"[ERROR] Error processing streaming event: {stream_event_error}")
+                    print(f"[ERROR] Problematic event: {event}")
+                    # Continue processing instead of crashing the entire stream
+                    continue
+        
+        except Exception as streaming_error:
+            print(f"[ERROR] Error in streaming loop: {streaming_error}")
+            # Don't re-raise, let the outer exception handler deal with it
 
         # Yield sources after career advice if career advice was provided
         if career_advice_result_sent:
-            top_sources = get_top_sources_for_current_request(limit=5)
-            if top_sources:
-                yield {"sources": top_sources}
+            try:
+                top_sources = get_top_sources_for_current_request(limit=5)
+                if top_sources:
+                    yield {"sources": top_sources}
+            except Exception as sources_error:
+                print(f"[ERROR] Error getting sources: {sources_error}")
+                # Continue without sources rather than failing
 
         # Store assistant response in memory and yield final result
         if final_response:
-            if session_id or email:
-                _create_memory_event("ASSISTANT", final_response, session_id, email)
-            yield {"final_result": final_response}
+            try:
+                if session_id or email:
+                    _create_memory_event("ASSISTANT", final_response, session_id, email)
+                yield {"final_result": final_response}
+            except Exception as final_error:
+                print(f"[ERROR] Error in final processing: {final_error}")
+                # Still yield the result even if memory storage fails
+                yield {"final_result": final_response}
 
     except Exception as e:
         error_msg = f"Error processing request: {str(e)}"
