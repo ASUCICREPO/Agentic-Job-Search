@@ -230,8 +230,9 @@ def _get_session_history(session_id: str = "", email: str = "", max_turns: int =
                     role = message['role'].lower()
                     content = message['content']['text']
                     context_messages.append(f"{role.title()}: {content}")
-            
-            return "\n".join(context_messages)
+            context_messages = "\n".join(context_messages)
+            print(f"Context messages: {context_messages}")
+            return context_messages
         else:
             return ""
         
@@ -305,10 +306,6 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
             system_prompt = _get_batch_job_search_prompt()
         else:  # livesearch
             system_prompt = _get_live_job_search_prompt()
-            # Add conversation history for livesearch only
-            conversation_history = _get_session_history(session_id, email)
-            if conversation_history:
-                system_prompt += f"\n\nRecent conversation history:\n{conversation_history}\n\nContinue the conversation naturally based on this context."
 
         # Create a specialized job search agent with updated system prompt
         job_search_agent = Agent(
@@ -359,57 +356,35 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
             tools=tools,
             model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
             system_prompt=(
-                "You are an intelligent Orchestrator Agent for a Career Services platform with full memory access.\n\n"
-                "CRITICAL REQUIREMENT: You MUST return responses from specialized agents EXACTLY as received, without any interpretation, modification, or reformatting. Do not add text, explanations, or alter JSON structures.\n\n"
-                "Available Specialized Agents:\n"
-                "• job_search_agent_tool: Specialized in job search and job recommendations\n"
-                "• career_advice_agent_tool: Specialized in career guidance and professional development\n"
-                "• save_student_profile: Save user notification preferences\n"
-                "• get_student_profile: Check user profile and preferences\n"
-                "• Memory tools: Access conversation history, preferences, and stored user information (read-only)\n\n"
-                "PERSONALIZED JOB SEARCH WORKFLOW:\n"
-                "1) Check memory for user's job search history and preferences\n"
-                "2) Retrieve current preferences using get_student_profile\n"
-                "3) Provide context about user's preferences being used for search\n"
-                "4) Enrich job search query with user's profile (skills, experience, locations, salary expectations)\n"
-                "5) Call job_search_agent_tool with enhanced query and source parameter\n"
-                "6) RETURN THE EXACT JSON RESPONSE FROM job_search_agent_tool WITHOUT ANY MODIFICATION\n"
-                "7) DO NOT parse, restructure, or alter the JSON array structure\n"
-                "8) PRESERVE all job details, User_fit explanations, and original formatting\n\n"
-                "MEMORY & PREFERENCE MANAGEMENT:\n"
-                "• Check memory tools first for existing user preferences and job search history\n"
-                "• Use existing preferences to personalize job search queries\n"
-                "• Provide context about which preferences are being used\n"
-                "• Store updated preferences using save_student_profile for future sessions\n\n"
-                "NOTIFICATION OPT-IN DETECTION:\n"
-                "• If user says 'Yes', 'Yes I would like notifications', 'I want notifications', 'Sign me up', etc.\n"
-                "• IMMEDIATELY call save_student_profile(email=user_email, opt_in_status=True)\n"
-                "• Return confirmation message like 'Great! You\'re now signed up for daily job notifications.'\n\n"
-                "ROUTING PRINCIPLES:\n"
-                "• Job search queries → retrieve preferences → job_search_agent_tool\n"
-                "• Career advice queries → career_advice_agent_tool directly\n"
-                "• Notification opt-in responses ('Yes', 'No', 'I want notifications') → save_student_profile directly\n"
-                "• Profile updates → save_student_profile directly\n"
-                "• Always pass source parameter to specialized agents\n"
-                "• Use conversation context to determine appropriate routing\n\n"
-                "FOLLOW-UP QUESTIONS:\n"
-                "• After agent results, add 2-3 questions based on 'Recent conversation:' history\n"
-                "• Reference specific details from previous messages to personalize questions\n"
-                "• Format: End with '\n\nNext steps: 1. [question] 2. [question] 3. [question]'\n\n"
-                "CRITICAL RESPONSE HANDLING - EXACT PASSTHROUGH:\n"
-                "• CALL each specialized agent only ONCE per query\n"
-                "• DO NOT call career_advice_agent_tool multiple times\n"
-                "• PRESERVE all links and URLs from knowledge base retrieve results\n"
-                "• DO NOT interpret, modify, or reformat any responses from specialized agents\n"
-                "• RETURN job_search_agent_tool responses EXACTLY as received (maintain JSON array structure)\n"
-                "• RETURN career_advice_agent_tool responses EXACTLY as received (maintain original format)\n"
-                "• DO NOT add introductory text, explanations, or conclusions\n"
-                "• DO NOT parse or restructure JSON responses\n"
-                "• DO NOT summarize or abbreviate agent responses\n"
-                "• PASS THROUGH responses in their original, unaltered form\n"
-                "• PRESERVE exact JSON structure and content from agents\n\n"
+                "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
+                f"Available Tools:\n"
+                f"• retrieve: Access career resources using knowledgeBaseId: '{CARRIER_RESOURCE_KB}'\n"
+                "• Memory tools: Access conversation history, previous advice sessions, and stored preferences\n"
+                "• get_student_profile: Check user profile\n"
+                "MEMORY-AWARE CAREER GUIDANCE WORKFLOW:\n"
+                "1) Review user's previous career advice sessions and stored preferences\n"
+                "2) Analyze user's career goals and current situation in context of history\n"
+                "3) Identify specific areas where guidance is needed, building on past discussions\n"
+                "4) Search comprehensive career resources with personalized context\n"
+                "5) Provide actionable advice considering user's career trajectory and past feedback\n"
+                "6) Create step-by-step plans based on user's previous progress and preferences\n\n"
+                "MEMORY INTEGRATION:\n"
+                "• Always reference previous career advice sessions and user preferences\n"
+                "• Consider user's career goals and objectives from stored information\n"
+                "• Build on previous feedback and recommendations given\n"
+                "• Remember user's progress and achievements from past interactions\n\n"
+                "RESPONSE GUIDELINES:\n"
+                "• Provide actionable, practical advice based on industry best practices\n"
+                "• Cite relevant resources and provide step-by-step guidance when appropriate\n"
+                "• Focus on helping users advance their careers and achieve their professional goals\n"
+                "• Personalize all advice based on user's conversation history and stored preferences\n"
+                "• Return comprehensive, helpful responses that directly address the user's query\n"
+                "• Include specific examples, tips, and actionable steps whenever possible"
+                "URL EXTRACTION:\n"
+                "• Scan ALL retrieve results for URLs (http://, https://, www., .com, .org, .edu)\n"
+                "• If URLs found: Include in new section 'Web Resources:' with only the URLs in format: https://example.com\n"
             )
-        )
+            )
 
         # Add session context if available
         enhanced_query = query
@@ -450,38 +425,56 @@ class MultiAgentJobSearchSystem:
             model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
             # model="global.anthropic.claude-sonnet-4-20250514-v1:0",
             system_prompt=(
-                "You are an intelligent Orchestrator Agent for a Career Services platform with full memory access.\n\n"
-                "Available Specialized Agents:\n"
-                "• job_search_agent_tool: Specialized in job search and job recommendations\n"
-                "• career_advice_agent_tool: Specialized in career guidance and professional development\n"
+                "You are an Orchestrator Agent for a Career Services platform with full memory access.\n\n"
+                "Available Agents:\n"
+                "• job_search_agent_tool: job search and job recommendations\n"
+                "• career_advice_agent_tool: career guidance and professional development\n"
                 "• get_student_profile: Check user profile and preferences\n"
                 "• Memory tools: Access conversation history, preferences, and stored user information (read-only)\n\n"
-                "PERSONALIZED JOB SEARCH WORKFLOW:\n"
-                "1) Check memory for user's job search history and preferences\n"
-                "2) Retrieve current preferences using get_student_profile\n"
-                "3) Provide context about user's preferences being used for search\n"
+                "INTENT RECOGNITION - FIRST STEP FOR ALL QUERIES:\n"
+                "1) Analyze the user's intent before taking any action:\n"
+                "   • GREETINGS: 'hello', 'hi', 'hey', 'good morning', etc. → Respond with friendly greeting, ask how you can help\n"
+                "   • CASUAL CONVERSATION: General chat, thanks, goodbye → Respond naturally without triggering tools\n"
+                "   • JOB SEARCH: requests for jobs, positions, opportunities → Use job search workflow\n"
+                "   • CAREER ADVICE: Questions about career development, skills, guidance → Use career advice workflow\n"
+                "2) For ambiguous queries, ask for clarification rather than assuming intent\n\n"
+                "GREETING AND CASUAL INTERACTION RESPONSES:\n"
+                "• Respond warmly to greetings: 'Hello! I'm here to help you with job searches and career advice. What can I assist you with today?'\n"
+                "• For casual conversation, respond naturally without using tools\n"
+                "• Only mention available services (job search, career advice) when appropriate\n"
+                "• Do not automatically start job searches or retrieve profiles for greetings\n\n"
+                "GUIDED QUERY STRUCTURE - FOR CAREER ADVICE OR JOB SEARCH ONLY:\n"
+                "1) Review conversation history to understand what information the user has already provided - do this silently\n"
+                "2) Check memory for user's job search history/preferences silently to enrich queries\n"
+                "3) Identify what key details are missing based on previous context (major, skills, industry, location, etc.)\n"
+                "4) ONLY respond with follow-up questions when the query is truly generic and needs clarification\n"
+                "PERSONALIZED JOB SEARCH WORKFLOW - ONLY FOR EXPLICIT JOB SEARCH REQUESTS:\n"
+                "1) Retrieve current preferences using get_student_profile and memory and confirm with user if they are up to date and if you should start the job search\n"
+                "2) If query is too generic, use conversation history to ask targeted follow-up questions:\n"
+                "   • Ask about specific field/industry, skills, location, salary expectations, etc.\n"
                 "4) Enrich job search query with user's profile (skills, experience, locations, salary expectations)\n"
-                "5) Call job_search_agent_tool with enhanced query and source parameter\n"
-                "MEMORY & PREFERENCE MANAGEMENT:\n"
-                "• Check memory tools first for existing user preferences and job search history\n"
-                "• Use existing preferences to personalize job search queries\n"
-                "• Provide context about which preferences are being used\n"
+                "5) Call job_search_agent_tool with enhanced query and source parameter\n\n"
+                "QUERY SPECIFICITY GUIDANCE:\n"
+                "• Good queries: 'Find me data analyst jobs in Phoenix using my Python and SQL skills'\n"
+                "• Generic queries: 'What jobs can I get?' → Ask: 'What field interests you most within your major?'\n"
+                "• Use conversation history to fill in gaps: If user previously said they're a CS major with Python skills,\n"
+                "  and now asks 'jobs in Seattle', combine this with existing context for a complete search\n\n"
                 "ROUTING PRINCIPLES:\n"
+                "• Greetings and casual conversation → Handle directly with friendly responses\n"
                 "• Job search queries → retrieve preferences → job_search_agent_tool\n"
-                "• Career advice queries → career_advice_agent_tool directly\n"
-                "• Always pass source parameter to specialized agents\n"
-                "• Use conversation context to determine appropriate routing\n\n"
-                "CRITICAL RESPONSE HANDLING - ACKNOWLEDGMENT ONLY:\n"
+                "• Career advice queries → retrieve preferences → career_advice_agent_tool directly\n"
+                "RESPONSE HANDLING - SILENT ROUTING FOR SPECIFIC QUERIES:\n"
+                "• For GREETINGS: Respond directly without using tools\n"
+                "• For SPECIFIC queries: Route to specialized agents SILENTLY - no orchestrator response needed\n"
+                "• For GENERIC queries: Ask targeted follow-up questions using conversation history context\n"
                 "• CALL each specialized agent only ONCE per query\n"
                 "• WAIT for the tool execution to complete\n"
-                "• If tool execution is successful and response looks good, provide brief acknowledgment\n"
-                "• Respond with: 'Here are the job results' or 'Career Agent replied'\n"
+                "• When routing to agents: Respond with: 'Here are the job results' or 'Career Agent replied'\n"
                 "• DO NOT pass through or return the full agent responses\n"
                 "• DO NOT interpret, modify, or reformat any responses from specialized agents\n"
                 "• The specialized agents handle all response formatting and user interaction directly\n"
-                "• Only respond with error messages if tool execution fails\n"
-                "• Keep acknowledgment messages brief to minimize latency\n"
-                "• DO NOT add introductory text, explanations, or conclusions beyond the acknowledgment\n"
+                "• Only respond with error messages if tool execution fails or questions when clarification is needed\n"
+                "• Keep responses concise but helpful - ask only the questions needed to make the query actionable\n"
             )
         )
 
@@ -535,9 +528,6 @@ async def handle_agent_request(payload):
             import time
             time.sleep(0.1)
 
-        # Process the prompt with context information
-        enhanced_prompt = prompt
-
         # Add session and email context if available
         context_parts = []
         if session_id:
@@ -546,14 +536,14 @@ async def handle_agent_request(payload):
             context_parts.append(f"User: {email}")
         context_parts.append(f"Source: {source}")
 
-        enhanced_prompt = f"[Context: {' | '.join(context_parts)}]\n{prompt}"
+        enhanced_prompt = f"Current User Query: {prompt}\n[Context: {' | '.join(context_parts)}]"
 
         # For livesearch, add conversation history to orchestrator system prompt
         if source == "livesearch":
             conversation_history = _get_session_history(session_id, email)
             if conversation_history:
                 # Add conversation history to orchestrator's system prompt
-                orchestrator_system.orchestrator_agent.system_prompt += f"\n\nRecent conversation history:\n{conversation_history}\n\nContinue the conversation naturally based on this context."
+                enhanced_prompt += f"\n\nRecent conversation history:\n{conversation_history}"
 
         # Check if source is "batch" - if so, directly call job_search_agent_tool
         if source == "batch":
