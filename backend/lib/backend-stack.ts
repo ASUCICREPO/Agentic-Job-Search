@@ -23,28 +23,28 @@ export class jobsearch1 extends cdk.Stack {
 
     // basic information retrieval before writing resources
     // Admin email for SES sender identity
-    const adminEmail = this.node.tryGetContext('adminEmail');
-    if(!adminEmail)
-      throw new Error("Missing required context variable: adminEmail. Please provide 'adminEmail' in CDK context (e.g., cdk deploy -c adminEmail=your@email.com)");
+    const senderEmail = this.node.tryGetContext('senderEmail');
+    if (!senderEmail)
+      throw new Error("Missing required context variable: senderEmail. Please provide 'senderEmail' in CDK context (e.g., cdk deploy -c senderEmail=your@email.com)");
 
     const aws_region = cdk.Stack.of(this).region;
     const accountId = cdk.Stack.of(this).account;
     console.log(`AWS Region: ${aws_region}`);
 
-    const hostArchitecture = os.arch(); 
+    const hostArchitecture = os.arch();
     console.log(`Host architecture: ${hostArchitecture}`);
-    
+
     const lambdaArchitecture = hostArchitecture === 'arm64' ? lambda.Architecture.ARM_64 : lambda.Architecture.X86_64;
     console.log(`Lambda architecture: ${lambdaArchitecture}`);
 
     // Create SES Email Identity
     const senderIdentity = new ses.EmailIdentity(this, 'SenderIdentity', {
-      identity: ses.Identity.email(adminEmail),
+      identity: ses.Identity.email(senderEmail),
     });
 
     const JobsBucket = new s3.Bucket(this, 'JobsBucket', {
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN, 
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     const ResumeBucket = new s3.Bucket(this, 'ResumeBucket', {
@@ -78,13 +78,8 @@ export class jobsearch1 extends cdk.Stack {
       },
       removalPolicy: cdk.RemovalPolicy.DESTROY, // for production have retain
     });
-        
-    // Export the table name for reference
-    new cdk.CfnOutput(this, 'StudentProfileTableOutput', {
-      value: StudentProfileTable.tableName,
-      description: 'DynamoDB table for storing student profiles',
-      exportName: 'StudentProfileTable',
-    });
+
+
 
     const saveProfile = new lambda.Function(this, 'saveProfile', {
       runtime: lambda.Runtime.PYTHON_3_12,
@@ -92,7 +87,7 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'save-profile')),
       environment: {
-      STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
+        STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
       },
       architecture: lambdaArchitecture,
     });
@@ -102,7 +97,7 @@ export class jobsearch1 extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
         allowedOrigins: ['*'],
-        allowedMethods: [lambda.HttpMethod.POST,lambda.HttpMethod.GET],
+        allowedMethods: [lambda.HttpMethod.POST, lambda.HttpMethod.GET],
         allowedHeaders: ['Content-Type']
       }
     });
@@ -153,11 +148,11 @@ export class jobsearch1 extends cdk.Stack {
     });
 
 
-    // Build Docker image and push to ECR as part of CDK deployment
+    // Skip Docker image build for faster deployment - use existing image
     const jobSearchAgentImage = new ecrAssets.DockerImageAsset(this, 'JobSearchAgentImage', {
       directory: path.join(__dirname, '..', 'JobSearchAgent'),
-      platform: lambdaArchitecture === lambda.Architecture.ARM_64 
-        ? ecrAssets.Platform.LINUX_ARM64 
+      platform: lambdaArchitecture === lambda.Architecture.ARM_64
+        ? ecrAssets.Platform.LINUX_ARM64
         : ecrAssets.Platform.LINUX_AMD64,
     });
 
@@ -165,8 +160,8 @@ export class jobsearch1 extends cdk.Stack {
       bucket: JobsBucket,
       knowledgeBase: kb,
       contextEnrichment: ContextEnrichment.foundationModel({
-    enrichmentModel: bedrock.BedrockFoundationModel.ANTHROPIC_CLAUDE_HAIKU_V1_0,
-        }),
+        enrichmentModel: bedrock.BedrockFoundationModel.ANTHROPIC_CLAUDE_HAIKU_V1_0,
+      }),
     });
 
     // SQS Queue for job notifications
@@ -182,8 +177,7 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
-        JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
+        STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
         SQS_QUEUE_URL: jobNotificationQueue.queueUrl,
       },
     });
@@ -205,25 +199,19 @@ export class jobsearch1 extends cdk.Stack {
     const sqsProcessorLambda = new lambda.Function(this, 'SQSProcessorLambda', {
       runtime: lambda.Runtime.PYTHON_3_11,
       handler: 'index.lambda_handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'sqs-processor')),
+      code: lambda.Code.fromDockerBuild(path.join(__dirname, '..', 'lambda', 'sqs-processor')),
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        BEDROCK_AGENT_ID: 'your-agent-id', // TODO: Replace with actual agent ID
-        BEDROCK_AGENT_ALIAS_ID: 'your-agent-alias-id', // TODO: Replace with actual agent alias ID
+        BEDROCK_AGENTCORE_RUNTIME_ARN:'MANUALLY_ADD_HERE',
+        BEDROCK_AGENTCORE_QUALIFIER: 'DEFAULT',
       },
     });
 
-    // Grant permissions for SQS processor
+    // Changed from 'bedrock:InvokeAgent' to 'bedrock-agentcore:InvokeAgentRuntime' for AgentCore compatibility
     sqsProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['bedrock:InvokeAgent'],
-      resources: ['*'],
-    }));
-
-    sqsProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['ses:SendEmail'],
+      actions: ['bedrock-agentcore:InvokeAgentRuntime'],
       resources: ['*'],
     }));
 
@@ -248,7 +236,7 @@ export class jobsearch1 extends cdk.Stack {
         DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
         JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
         SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
-        SENDER_EMAIL: adminEmail,
+        SENDER_EMAIL: senderEmail,
       },
     });
 
@@ -256,7 +244,7 @@ export class jobsearch1 extends cdk.Stack {
     StudentProfileTable.grantReadData(notificationSenderLambda);
     JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
     smsNotificationTopic.grantPublish(notificationSenderLambda);
-    
+
     notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['ses:SendEmail', 'ses:SendRawEmail'],
@@ -275,8 +263,8 @@ export class jobsearch1 extends cdk.Stack {
       description: 'Send daily notifications at 9 AM MST',
     });
 
-    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda)); 
-    
+    dailyNotificationRule.addTarget(new targets.LambdaFunction(notificationSenderLambda));
+
     new cdk.CfnOutput(this, 'DockerImageURI', {
       value: jobSearchAgentImage.imageUri,
       description: 'Built Docker Image URI (CDK-managed ECR)',
@@ -296,23 +284,36 @@ export class jobsearch1 extends cdk.Stack {
       exportName: 'JobRecommendationsTableName',
     });
 
-  new cdk.CfnOutput(this, 'ResumeBucketName', {
-    value: ResumeBucket.bucketName,
-    description: 'S3 bucket for storing user resumes',
-    exportName: 'ResumeBucketName',
-  });
+    new cdk.CfnOutput(this, 'ResumeBucketName', {
+      value: ResumeBucket.bucketName,
+      description: 'S3 bucket for storing user resumes',
+      exportName: 'ResumeBucketName',
+    });
 
-  new cdk.CfnOutput(this, 'SaveProfileUrl', {
-    value: saveProfileUrl.url,
-    description: 'Lambda Function URL for save profile endpoint',
-    exportName: 'SaveProfileUrl',
-  });
+    new cdk.CfnOutput(this, 'SaveProfileUrl', {
+      value: saveProfileUrl.url,
+      description: 'Lambda Function URL for save profile endpoint',
+      exportName: 'SaveProfileUrl',
+    });
 
-  new cdk.CfnOutput(this, 'ResumeProcessorUrl', {
-    value: resumeProcessorUrl.url,
-    description: 'Lambda Function URL for resume parser endpoint',
-    exportName: 'ResumeProcessorUrl',
-  });
+    new cdk.CfnOutput(this, 'ResumeProcessorUrl', {
+      value: resumeProcessorUrl.url,
+      description: 'Lambda Function URL for resume parser endpoint',
+      exportName: 'ResumeProcessorUrl',
+    });
+
+    new cdk.CfnOutput(this, 'SQSQueueUrl', {
+      value: jobNotificationQueue.queueUrl,
+      description: 'SQS Queue URL for job notifications',
+      exportName: 'SQSQueueUrl',
+    });
+
+        // Export the table name for reference
+        new cdk.CfnOutput(this, 'StudentProfileTableOutput', {
+          value: StudentProfileTable.tableName,
+          description: 'DynamoDB table for storing student profiles',
+          exportName: 'StudentProfileTable',
+        });
 
   }
 }
