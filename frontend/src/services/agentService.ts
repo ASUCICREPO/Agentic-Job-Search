@@ -1,36 +1,58 @@
 import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore';
 import { getUserEmail } from '../utils/cookieUtils';
 
-// Session management utility
+// Session management utility - generates new session ID on every page refresh
 const SESSION_STORAGE_KEY = 'agentic_job_search_session_id';
+const PAGE_LOAD_KEY = 'agentic_job_search_page_load_id';
 
-export function getOrCreateSessionId(): string {
-  // Check if we already have a session ID in sessionStorage
-  let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+// Store a unique page load identifier to detect page refreshes
+let currentPageLoadId: string | null = null;
 
-  // Check if existing session ID is too short (for backward compatibility)
-  if (sessionId && sessionId.length < 33) {
-    sessionId = null; // Force regeneration
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+function generateSessionId(): string {
+  const timestamp = Date.now();
+  // Generate a longer random string to ensure we meet the 33 character minimum
+  const randomString1 = Math.random().toString(36).substr(2, 16);
+  const randomString2 = Math.random().toString(36).substr(2, 8);
+  let sessionId = `session_${timestamp}_${randomString1}${randomString2}`;
+
+  // Ensure the session ID meets the minimum length requirement
+  if (sessionId.length < 33) {
+    // Add more random characters if needed
+    const additionalRandom = Math.random().toString(36).substr(2);
+    sessionId += additionalRandom.substr(0, 33 - sessionId.length);
   }
 
+  return sessionId;
+}
+
+export function getOrCreateSessionId(): string {
+  // Generate a unique identifier for this page load
+  const pageLoadId = Math.random().toString(36).substr(2, 15);
+  
+  // Check if this is a new page load (refresh or initial load)
+  const storedPageLoadId = sessionStorage.getItem(PAGE_LOAD_KEY);
+  const isNewPageLoad = !currentPageLoadId || currentPageLoadId !== storedPageLoadId;
+  
+  // Set current page load ID
+  currentPageLoadId = pageLoadId;
+  sessionStorage.setItem(PAGE_LOAD_KEY, pageLoadId);
+
+  // Always generate a new session ID on page refresh or initial load
+  if (isNewPageLoad) {
+    const newSessionId = generateSessionId();
+    sessionStorage.setItem(SESSION_STORAGE_KEY, newSessionId);
+    console.log(`New session ID generated on page load: ${newSessionId}`);
+    return newSessionId;
+  }
+
+  // For same-page interactions, use existing session ID
+  let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+  
+  // Fallback: if no session ID exists, generate a new one
   if (!sessionId) {
-    // Generate a new session ID if one doesn't exist
-    const timestamp = Date.now();
-    // Generate a longer random string to ensure we meet the 33 character minimum
-    const randomString1 = Math.random().toString(36).substr(2, 16);
-    const randomString2 = Math.random().toString(36).substr(2, 8);
-    sessionId = `session_${timestamp}_${randomString1}${randomString2}`;
-
-    // Ensure the session ID meets the minimum length requirement
-    if (sessionId.length < 33) {
-      // Add more random characters if needed
-      const additionalRandom = Math.random().toString(36).substr(2);
-      sessionId += additionalRandom.substr(0, 33 - sessionId.length);
-    }
-
-    // Store it in sessionStorage so it persists across page interactions
+    sessionId = generateSessionId();
     sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+    console.log(`Fallback session ID generated: ${sessionId}`);
   }
 
   return sessionId;
@@ -38,6 +60,15 @@ export function getOrCreateSessionId(): string {
 
 export function clearSessionId(): void {
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  sessionStorage.removeItem(PAGE_LOAD_KEY);
+  currentPageLoadId = null;
+}
+
+export function forceNewSessionId(): string {
+  // Clear existing session data
+  clearSessionId();
+  // Generate and return new session ID
+  return getOrCreateSessionId();
 }
 
 interface StreamingCallbacks {
