@@ -30,7 +30,7 @@ A React.js frontend application that replicates the Figma design for ASU Career 
 
 ### Method 1: Replace Image Components (Recommended)
 
-1. **Add your image files** to `src/assets/images/`:
+1. **Add your image files** to `src/assets/`:
    - `asu-logo.png` - ASU logo (recommended size: 120x80px)
    - `user-avatar.jpg` - User profile picture (recommended size: 80x80px)
    - `bot-avatar.png` - Chatbot avatar (recommended size: 80x80px)
@@ -38,9 +38,9 @@ A React.js frontend application that replicates the Figma design for ASU Career 
 2. **Update `src/components/ImageAssets.tsx`**:
    ```tsx
    // Add imports at the top
-   import asuLogo from '../assets/images/asu-logo.png';
-   import userAvatar from '../assets/images/user-avatar.jpg';
-   import botAvatar from '../assets/images/bot-avatar.png';
+   import asuLogo from '../assets/asu-logo.png';
+   import userAvatar from '../assets/user-avatar.jpg';
+   import botAvatar from '../assets/bot-avatar.png';
 
    // Replace the placeholder components
    export const ASULogoImage: React.FC<{ className?: string }> = ({ className }) => (
