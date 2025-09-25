@@ -2,8 +2,8 @@
 import React, { useState, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import styled, { createGlobalStyle } from "styled-components";
-import sparkyImage from '../assets/images/sparky.png';
-import myProfileImage from '../assets/images/my_profile.png';
+import sparkyImage from '../assets/sparky.png';
+import myProfileImage from '../assets/my_profile.png';
 import { uploadResumeAndParse, saveProfile, getProfile, ProfileData } from '../services/profileService';
 import { getUserEmail, setUserEmail } from '../utils/cookieUtils';
 
