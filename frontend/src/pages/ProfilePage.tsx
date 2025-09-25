@@ -716,7 +716,7 @@ const ProfilePage: React.FC = () => {
 
             <Field>
               <Label htmlFor="location">Location</Label>
-              <Input id="location" name="location" placeholder="City, state" value={formData.location} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <Input id="location" name="location" placeholder="City, State" value={formData.location} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
