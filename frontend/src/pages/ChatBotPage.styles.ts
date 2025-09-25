@@ -103,7 +103,7 @@ export const BotMessageWrapper = styled.div`
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  max-width: 60%;
+  max-width: 65%;
 `;
 
 export const BotContentWrapper = styled.div`
@@ -150,7 +150,7 @@ export const Timestamp = styled.div`
 
 export const InputContainer = styled.div`
   padding: 20px 80px 50px 80px;
-  background: transparent;
+  background: #f0f0f0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -248,7 +248,7 @@ export const TypingIndicator = styled.div`
   padding: 15px 20px;
   background: linear-gradient(135deg, #FFF9C4 0%, #FFC627 100%);
   border-radius: 20px;
-  max-width: 60%;
+  max-width: 65%;
 `;
 
 export const TypingDot = styled.div`
@@ -264,23 +264,6 @@ export const TypingDot = styled.div`
   @keyframes typing {
     0%, 80%, 100% { transform: scale(0); }
     40% { transform: scale(1); }
-  }
-`;
-
-export const ViewJobsButton = styled.button`
-  background: #8B1538;
-  color: white;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  margin: 12px auto 0 auto;
-  display: block;
-  font-size: 1rem;
-  font-weight: 600;
-
-  &:hover {
-    background: #6d1028;
   }
 `;
 
