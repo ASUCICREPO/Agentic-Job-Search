@@ -2,7 +2,7 @@
 import React, { useState, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import styled, { createGlobalStyle } from "styled-components";
-import sparkyImage from '../assets/images/sparky.svg';
+import sparkyImage from '../assets/images/sparky.png';
 import myProfileImage from '../assets/images/my_profile.png';
 import { uploadResumeAndParse, saveProfile, getProfile, ProfileData } from '../services/profileService';
 import { getUserEmail, setUserEmail } from '../utils/cookieUtils';
@@ -90,6 +90,10 @@ const Mascot = styled.img`
   width: 50px;
   height: 71px;
   flex: 0 0 auto;
+  /* PNG image rendering optimizations */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  object-fit: contain;
 `;
 
 const UploadMessage = styled.p`
