@@ -1,6 +1,5 @@
 import React from 'react';
 import styled from 'styled-components';
-import triASU from '../assets/images/triASU.png';
 import { saveProfile, getProfile, ProfileData } from '../services/profileService';
 import { getUserEmail } from '../utils/cookieUtils';
 
@@ -40,6 +39,14 @@ const PopupHeader = styled.div`
   border-radius: 12px 12px 0 0;
 `;
 
+const JobHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+`;
+
+
 const NotificationToggleContainer = styled.div`
   display: flex;
   align-items: center;
@@ -47,25 +54,50 @@ const NotificationToggleContainer = styled.div`
   flex-shrink: 0;
 `;
 
+const JobChipsContainer = styled.div`
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+`;
+
+const JobChip = styled.span`
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #495057;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  align-self: flex-start;
+`;
+
 const ToggleLabel = styled.label<{ $isAutoChecked?: boolean }>`
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
   cursor: pointer;
   font-size: 0.8rem;
   color: ${props => props.$isAutoChecked ? '#8B1538' : '#333'};
   font-weight: 500;
-  white-space: nowrap;
   position: relative;
 
-  &::after {
+  &::before {
     content: ${props => props.$isAutoChecked ? '"(Matches your preferred role)"' : '""'};
-    position: absolute;
-    top: -12px;
-    left: 0;
     font-size: 0.6rem;
     color: #8B1538;
     font-weight: 400;
+    margin-bottom: 2px;
+    white-space: nowrap;
+  }
+
+  span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 `;
 
@@ -115,72 +147,56 @@ const CloseButton = styled.button`
 `;
 
 const JobGrid = styled.div`
-  padding: 15px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   overflow-y: auto;
   flex: 1;
   border-radius: 0 0 12px 12px;
+  width: 100%;
 `;
 
 const JobCard = styled.div`
   background: white;
   border-radius: 8px;
-  padding: 16px;
+  padding: 12px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-left: 3px solid #8B1538;
+  border-left: 3px solid #FFC627;
   position: relative;
   transition: box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
 
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   }
 `;
 
-const JobHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
-`;
 
 const JobInfo = styled.div`
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 0;
 `;
 
 const JobTitle = styled.h3`
   color: #333;
   font-size: 1.1rem;
-  margin: 0 0 2px 0;
+  margin: 0 0 1px 0;
   font-weight: 600;
 `;
 
 const Company = styled.p`
   color: #666;
-  margin: 0;
+  margin: 0 0 4px 0;
   font-size: 0.85rem;
 `;
 
-const JobMeta = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin: 8px 0;
-  font-size: 0.8rem;
-  color: #666;
-`;
-
-const MetaItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-`;
 
 const JobDescription = styled.p`
   color: #555;
   line-height: 1.4;
-  margin: 10px 0;
+  margin: 4px 0;
   font-size: 0.9rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -189,13 +205,14 @@ const JobDescription = styled.p`
 `;
 
 const RequirementsContent = styled.div`
-  flex: 1;
+  margin: 4px 0;
 `;
 
 const RequirementsTitle = styled.h4`
   color: #333;
   font-size: 0.9rem;
-  margin: 0 0 4px 0;
+  margin: 0 0 2px 0;
+  font-weight: 600;
 `;
 
 const RequirementsList = styled.ul`
@@ -207,7 +224,21 @@ const RequirementsList = styled.ul`
 `;
 
 const ButtonContainer = styled.div`
-  margin-top: 12px;
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  @media (max-width: 480px) {
+    gap: 12px;
+  }
 `;
 
 const ApplyButton = styled.button`
@@ -225,6 +256,7 @@ const ApplyButton = styled.button`
   transition: all 0.2s ease;
   box-shadow: 0 3px 6px rgba(139, 21, 56, 0.25);
   margin: 0;
+  margin-bottom: 10px;
   display: inline-block;
 
   &:hover {
@@ -235,87 +267,48 @@ const ApplyButton = styled.button`
 
   &:active {
     transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(139, 21, 56, 0.2);
   }
 `;
 
 
-const TriASUContainer = styled.div`
-  position: absolute;
-  right: 50px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`;
-
-const TriASULogo = styled.img<{ $isClicked: boolean }>`
-  width: 50px;
-  height: auto;
-  cursor: pointer;
-  margin-bottom: 4px;
-  animation: ${props => props.$isClicked ? 'none' : 'pulse 2s infinite'};
-
-  @keyframes pulse {
-    0% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.15);
-    }
-    100% {
-      transform: scale(1);
-    }
-  }
-
-  &:hover {
-    animation: none;
-    transform: scale(1.05);
-  }
-`;
-
-const InsightText = styled.p`
-  font-size: 10px;
-  color: #666;
-  margin: 0;
-  text-align: center;
-  cursor: pointer;
-  line-height: 1.2;
-`;
-
-const UserFitModal = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1001;
-`;
-
-const UserFitContent = styled.div`
-  background: white;
-  padding: 24px;
+const WhyThisMatchesContainer = styled.div`
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border: 1px solid #e9ecef;
   border-radius: 12px;
-  max-width: 500px;
-  width: 90%;
+  padding: 20px;
+  margin: 10px 0 5px 0;
+  box-shadow: 0 4px 12px rgba(200, 200, 200, 0.15);
   position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(240, 240, 240, 0.2);
+    border-radius: 12px;
+    z-index: -1;
+  }
 `;
 
-const UserFitTitle = styled.h3`
+const WhyThisMatchesTitle = styled.h4`
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  font-weight: 700;
   color: #8B1538;
-  margin: 0 0 16px 0;
-  font-size: 1.2rem;
 `;
 
-const UserFitText = styled.p`
-  color: #333;
-  line-height: 1.6;
+const WhyThisMatchesText = styled.p`
   margin: 0;
+  font-size: 14px;
+  color: #000000;
+  line-height: 1.5;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
 `;
+
 
 interface Job {
   id: string;
@@ -329,6 +322,7 @@ interface Job {
   industry?: string;
   experience: string;
   fit?: string;
+  remote?: string;
 }
 
 interface JobPopupProps {
@@ -338,9 +332,7 @@ interface JobPopupProps {
 }
 
 const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) => {
-  const [selectedUserFit, setSelectedUserFit] = React.useState<string | null>(null);
   const [jobNotifications, setJobNotifications] = React.useState<{ [jobId: string]: boolean }>({});
-  const [clickedLogos, setClickedLogos] = React.useState<Set<string>>(new Set());
   const [autoEnabledJobs, setAutoEnabledJobs] = React.useState<Set<string>>(new Set());
   const [initialJobNotifications, setInitialJobNotifications] = React.useState<{ [jobId: string]: boolean }>({});
 
@@ -351,7 +343,7 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
         const userEmail = getUserEmail();
         if (userEmail) {
           const profile = await getProfile(userEmail);
-          if (profile && profile.preferredJobRole) {
+          if (profile && profile.preferredJobRole && profile.preferredJobRole !== 'N/A' && profile.preferredJobRole.trim() !== '') {
             const autoEnabledNotifications: { [jobId: string]: boolean } = {};
             const autoEnabledJobIds = new Set<string>();
 
@@ -382,7 +374,7 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
           }
         }
       } catch (error) {
-        console.error('Failed to load user profile:', error);
+        // Failed to load user profile
       }
     };
 
@@ -430,12 +422,6 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
     return `$${lowerNum.toLocaleString()}-$${upperNum.toLocaleString()}/year`;
   };
 
-  const handleTriASUClick = (fit: string | undefined, jobId: string) => {
-    if (fit) {
-      setSelectedUserFit(fit);
-      setClickedLogos(prev => new Set(prev).add(jobId));
-    }
-  };
 
   const handleJobToggleChange = (jobId: string, enabled: boolean) => {
     setJobNotifications(prev => ({
@@ -525,7 +511,7 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
             }
           }
         } catch (error) {
-          console.error('Profile update failed:', error);
+          // Profile update failed
         }
       })();
     }
@@ -547,49 +533,49 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
         <JobGrid>
           {jobs.map((job) => (
             <JobCard key={job.id}>
-              <TriASUContainer onClick={() => handleTriASUClick(job.fit, job.id)}>
-                <TriASULogo 
-                  src={triASU} 
-                  alt="triASU" 
-                  $isClicked={clickedLogos.has(job.id)}
-                />
-                <InsightText>Click here to view insights!</InsightText>
-              </TriASUContainer>
-              
               <JobHeader>
                 <JobInfo>
                   <JobTitle>{job.title}</JobTitle>
                   <Company>{job.company}</Company>
                 </JobInfo>
                 <NotificationToggleContainer>
-                  <ToggleLabel $isAutoChecked={autoEnabledJobs.has(job.id) && jobNotifications[job.id]}>
-                    <ToggleInput
-                      type="checkbox"
-                      checked={jobNotifications[job.id] || false}
-                      onChange={(e) => handleJobToggleChange(job.id, e.target.checked)}
-                    />
-                    <ToggleSwitch $isOn={jobNotifications[job.id] || false} />
-                    <span>Notify me for similar roles</span>
+                  <ToggleLabel $isAutoChecked={autoEnabledJobs.has(job.id)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ToggleInput
+                        type="checkbox"
+                        checked={jobNotifications[job.id] || false}
+                        onChange={(e) => handleJobToggleChange(job.id, e.target.checked)}
+                      />
+                      <ToggleSwitch $isOn={jobNotifications[job.id] || false} />
+                      <span>Notify me for similar roles</span>
+                    </div>
                   </ToggleLabel>
                 </NotificationToggleContainer>
               </JobHeader>
-              
-              <JobMeta>
-                <MetaItem>📍 {job.location}</MetaItem>
-                <MetaItem>💰 {formatSalary(job.salary_min, job.salary_max)}</MetaItem>
-                <MetaItem>⏰ {job.type}</MetaItem>
-              </JobMeta>
+
+              <JobChipsContainer>
+                <JobChip>📍 {job.location}</JobChip>
+                <JobChip>💰 {formatSalary(job.salary_min, job.salary_max)}</JobChip>
+                {job.industry && <JobChip>🏢 {job.industry}</JobChip>}
+                <JobChip>{job.type}</JobChip>
+                {job.remote === "yes" && <JobChip>Remote</JobChip>}
+              </JobChipsContainer>
 
               <JobDescription>{job.description}</JobDescription>
-              
+
               <RequirementsContent>
                 <RequirementsTitle>Requirements:</RequirementsTitle>
                 <RequirementsList>
                   <li>{job.experience !== "Not specified" ? `Experience: ${job.experience}` : "Experience requirements not specified"}</li>
-                  {job.industry && <li>Industry: {job.industry}</li>}
-                  <li>Employment Type: {job.type}</li>
                 </RequirementsList>
               </RequirementsContent>
+
+              <WhyThisMatchesContainer>
+                <WhyThisMatchesTitle>Why this matches you</WhyThisMatchesTitle>
+                <WhyThisMatchesText>
+                  {job.fit || "This role aligns with your profile and career goals based on your experience and preferences."}
+                </WhyThisMatchesText>
+              </WhyThisMatchesContainer>
 
               <ButtonContainer>
                 <ApplyButton onClick={() => alert(`Applying to ${job.title} at ${job.company}`)}>
@@ -600,21 +586,6 @@ const JobPopup: React.FC<JobPopupProps> = ({ jobs, onClose, selectedJobRole }) =
           ))}
         </JobGrid>
       </PopupContainer>
-      
-      {selectedUserFit && (
-        <UserFitModal onClick={() => setSelectedUserFit(null)}>
-          <UserFitContent onClick={(e) => e.stopPropagation()}>
-            <UserFitTitle>Job Fit Analysis</UserFitTitle>
-            <UserFitText>{selectedUserFit}</UserFitText>
-            <CloseButton 
-              onClick={() => setSelectedUserFit(null)}
-              style={{ position: 'absolute', top: '10px', right: '15px' }}
-            >
-              ×
-            </CloseButton>
-          </UserFitContent>
-        </UserFitModal>
-      )}
     </PopupOverlay>
   );
 };
