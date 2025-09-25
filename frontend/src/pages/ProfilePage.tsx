@@ -2,7 +2,7 @@
 import React, { useState, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import styled, { createGlobalStyle } from "styled-components";
-import sparkyImage from '../assets/images/sparky.png';
+import sparkyImage from '../assets/images/sparky.svg';
 import myProfileImage from '../assets/images/my_profile.png';
 import { uploadResumeAndParse, saveProfile, getProfile, ProfileData } from '../services/profileService';
 import { getUserEmail, setUserEmail } from '../utils/cookieUtils';
@@ -87,11 +87,9 @@ const UploadLeft = styled.div`
 `;
 
 const Mascot = styled.img`
-  width: 52px;
-  height: 52px;
-  border-radius: 999px;
+  width: 50px;
+  height: 71px;
   flex: 0 0 auto;
-  object-fit: cover;
 `;
 
 const UploadMessage = styled.p`
@@ -510,7 +508,14 @@ const ProfilePage: React.FC = () => {
   const onChange =
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const { name, value } = e.target;
-      setFormData(prev => ({ ...prev, [name]: value }));
+
+      // Enforce character limits for text areas
+      let processedValue = value;
+      if (['headline', 'aboutMe', 'education', 'experience'].includes(name)) {
+        processedValue = value.slice(0, 200);
+      }
+
+      setFormData(prev => ({ ...prev, [name]: processedValue }));
       // Clear validation errors when user starts typing
       if (validationErrors.length > 0) {
         setValidationErrors([]);
@@ -671,7 +676,7 @@ const ProfilePage: React.FC = () => {
             <UploadLeft>
               <Mascot src={sparkyImage} alt="Sparky mascot" />
               <UploadMessage>
-                I can help you get your profile set up by just uploading your Resume!
+                I will help you set up your profile. Just upload your resume!
               </UploadMessage>
             </UploadLeft>
 
@@ -696,42 +701,42 @@ const ProfilePage: React.FC = () => {
             <Grid>
             <Field>
               <Label htmlFor="fullName" $required>Full Name</Label>
-              <Input id="fullName" name="fullName" placeholder="Your First Name" value={formData.fullName} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <Input id="fullName" name="fullName" placeholder="Full name" value={formData.fullName} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
               <Label htmlFor="email" $required>Email</Label>
-              <Input id="email" name="email" placeholder="Email Address" value={formData.email} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <Input id="email" name="email" placeholder="Email address" value={formData.email} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
               <Label htmlFor="phone" $required>Phone Number</Label>
-              <Input id="phone" name="phone" placeholder="Phone Number" value={formData.phone} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <Input id="phone" name="phone" placeholder="Phone number" value={formData.phone} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
               <Label htmlFor="location">Location</Label>
-              <Input id="location" name="location" placeholder="City, State" value={formData.location} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <Input id="location" name="location" placeholder="City, state" value={formData.location} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
               <Label htmlFor="headline">Headline</Label>
-              <TextArea id="headline" name="headline" placeholder="Professional headline (100-200 characters)" value={formData.headline} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <TextArea id="headline" name="headline" placeholder="Professional headline (200 characters max)" value={formData.headline} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
               <Label htmlFor="aboutMe">About Me</Label>
-              <TextArea id="aboutMe" name="aboutMe" placeholder="100–200 Character Description" value={formData.aboutMe} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <TextArea id="aboutMe" name="aboutMe" placeholder="Tell us about yourself, your background, interests, and career goals (200 characters max)" value={formData.aboutMe} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
               <Label htmlFor="education">Education</Label>
-              <TextArea id="education" name="education" placeholder="Education details (100-200 characters)" value={formData.education} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <TextArea id="education" name="education" placeholder="List any diplomas, degrees, or certifications. (200 characters max)" value={formData.education} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
               <Label htmlFor="experience">Experience</Label>
-              <TextArea id="experience" name="experience" placeholder="List your Experience Here" value={formData.experience} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <TextArea id="experience" name="experience" placeholder="List jobs, community service, and more (200 characters max)" value={formData.experience} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
@@ -741,7 +746,7 @@ const ProfilePage: React.FC = () => {
 
             <Field>
               <Label htmlFor="linkedin">LinkedIn</Label>
-              <Input id="linkedin" name="linkedin" placeholder="LinkedIn Profile URL" value={formData.linkedin} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <Input id="linkedin" name="linkedin" placeholder="LinkedIn profile URL" value={formData.linkedin} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
           </Grid>
 
