@@ -38,7 +38,7 @@ echo "Detected GitHub Repo:  $GITHUB_REPO"
 read -rp "Is this correct? (y/n): " CONFIRM
 CONFIRM=$(printf '%s' "$CONFIRM" | tr '[:upper:]' '[:lower:]')
 
-if [[ "$CONFIRM" != "y" && "$CONFIRM" != "yes" ]]; then
+if [[ "$CONFIRM" != "y" && "$CONFIRM" != "yes" && "$CONFIRM" != "" ]]; then
   read -rp "Enter GitHub owner manually: " GITHUB_OWNER
   read -rp "Enter GitHub repo  manually: " GITHUB_REPO
 fi
