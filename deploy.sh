@@ -5,6 +5,9 @@ set -euo pipefail
 # 1. Prompt for all required values
 # --------------------------------------------------
 
+# Generate unique project name with timestamp
+PROJECT_NAME="Agentic-Job-Search-$(date +%Y%m%d%H%M%S)"
+
 # 1) Prompt for GITHUB_URL if unset
 if [ -z "${GITHUB_URL:-}" ]; then
   read -rp "Enter GitHub repository URL (e.g. https://github.com/OWNER/REPO or git@github.com:OWNER/REPO.git): " GITHUB_URL
@@ -42,6 +45,7 @@ CONFIRM=$(printf '%s' "$CONFIRM" | tr '[:upper:]' '[:lower:]')
 if [[ "$CONFIRM" != "y" && "$CONFIRM" != "yes" && "$CONFIRM" != "" ]]; then
   read -rp "Enter GitHub owner manually: " GITHUB_OWNER
   read -rp "Enter GitHub repo  manually: " GITHUB_REPO
+  GITHUB_URL="https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
 fi
 
 # 6) Continue with your CDK flow
@@ -70,8 +74,6 @@ fi
 # --------------------------------------------------
 # 2. Ensure IAM service role exists
 # --------------------------------------------------
-
-PROJECT_NAME="Agentic-Job-Search-$(date +%Y%m%d%H%M%S)"
 
 ROLE_NAME="${PROJECT_NAME}-service-role"
 echo "Checking for IAM role: $ROLE_NAME"
@@ -197,7 +199,6 @@ ENVIRONMENT='{
 # No artifacts
 ARTIFACTS='{"type":"NO_ARTIFACTS"}'
 
-# Source from GitHub
 SOURCE='{"type":"GITHUB","location":"'"$GITHUB_URL"'"}'
 
 # Which branch to build
