@@ -18,12 +18,12 @@ clean_url=${GITHUB_URL%.git}
 clean_url=${clean_url%/}
 
 # 3) Extract the path part (owner/repo) for HTTPS or SSH URLs
-if [[ $clean_url =~ ^https://github\.com/([^/]+/[^/]+)$ ]]; then
+if [[ $clean_url =~ ^https://github\.com/([^/]+/[^/]+) ]]; then
   path="${BASH_REMATCH[1]}"
   # 4) Split into owner and repo
   GITHUB_OWNER=${path%%/*}
   GITHUB_REPO=${path##*/}
-elif [[ $clean_url =~ ^git@github\.com:([^/]+/[^/]+)$ ]]; then
+elif [[ $clean_url =~ ^git@github\.com:([^/]+/[^/]+) ]]; then
   path="${BASH_REMATCH[1]}"
   # 4) Split into owner and repo
   GITHUB_OWNER=${path%%/*}
@@ -45,12 +45,14 @@ CONFIRM=$(printf '%s' "$CONFIRM" | tr '[:upper:]' '[:lower:]')
 if [[ "$CONFIRM" != "y" && "$CONFIRM" != "yes" && "$CONFIRM" != "" ]]; then
   read -rp "Enter GitHub owner manually: " GITHUB_OWNER
   read -rp "Enter GitHub repo  manually: " GITHUB_REPO
-  GITHUB_URL="https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
 fi
 
 # 6) Continue with your CDK flow
 echo "→ Final GITHUB_OWNER=$GITHUB_OWNER"
 echo "→ Final GITHUB_REPO=$GITHUB_REPO"
+
+# Ensure GITHUB_URL is always a valid repository URL
+GITHUB_URL="https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
 
 # 3) And for each CDK context var…
 if [ -z "${GITHUB_TOKEN:-}" ]; then
