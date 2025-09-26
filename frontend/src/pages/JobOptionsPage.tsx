@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
-import asuLogo from '../assets/images/asu-logo.png';
+import asuLogo from '../assets/asu-logo.png';
 
 const JobOptionsContainer = styled.div`
   min-height: 100vh;
