@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { ASULogoImage, UserAvatarImage, BotAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
-import JobPopup from '../components/JobPopup';
+import JobGrid from '../components/JobGrid';
 import {
   ChatContainer,
   Header,
@@ -29,7 +29,6 @@ import {
   SendButton,
   TypingIndicator,
   TypingDot,
-  ViewJobsButton,
   SourcesToggleButton,
   SourcesContainer,
   SourcesList,
@@ -43,8 +42,7 @@ interface Message {
     text: string;
     isUser: boolean;
     timestamp: Date;
-    hasJobButton?: boolean;
-    jobQuery?: string;
+    jobs?: Job[];
     sources?: Array<{url: string, score: number}>;
 }
 
@@ -151,8 +149,6 @@ const ChatBotPage: React.FC = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessingComplete, setIsProcessingComplete] = useState(true);
     const [currentlyStreamingMessageId, setCurrentlyStreamingMessageId] = useState<number | null>(null);
-    const [showJobPopup, setShowJobPopup] = useState(false);
-    const [jobs, setJobs] = useState<Job[]>([]);
     const [currentSources, setCurrentSources] = useState<Array<{url: string, score: number}>>([]);
     const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set());
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -188,9 +184,6 @@ const ChatBotPage: React.FC = () => {
         navigate('/', { state: { fromChatbot: true, userName: userName } });
     };
 
-    const handleViewJobs = () => {
-        setShowJobPopup(true);
-    };
 
     const toggleSources = (messageId: number) => {
         setExpandedSources(prev => {
@@ -269,18 +262,14 @@ const ChatBotPage: React.FC = () => {
                     }
 
                     if (jobs && jobs.length > 0) {
-                        setJobs(jobs);
-
-                        // Update the existing streaming message with job results
+                        // Update the existing streaming message with job results, keeping original text
                         if (streamingMessageId) {
                             setMessages(prev =>
                                 prev.map(msg =>
                                     msg.id === streamingMessageId
                                         ? {
                                             ...msg,
-                                            text: responseText,
-                                            hasJobButton: true,
-                                            jobQuery: currentInput
+                                            jobs: jobs
                                         }
                                         : msg
                                 )
@@ -292,8 +281,7 @@ const ChatBotPage: React.FC = () => {
                                 text: responseText,
                                 isUser: false,
                                 timestamp: new Date(),
-                                hasJobButton: true,
-                                jobQuery: currentInput
+                                jobs: jobs
                             };
                             setMessages(prev => [...prev, botMessage]);
                         }
@@ -500,12 +488,7 @@ const ChatBotPage: React.FC = () => {
                                     <BotAvatarImage />
                                     <BotContentWrapper>
                                         <BotMessageBubble>
-                                            {message.hasJobButton ? (
-                                                <p style={{ margin: '8px 0', lineHeight: '1.4', fontWeight: '500' }}>
-                                                    Here are your job results!
-                                                </p>
-                                            ) : (
-                                                <ReactMarkdown
+                                            <ReactMarkdown
                                                     components={{
                                                         p: ({children}) => <p style={{ margin: '8px 0', lineHeight: '1.4' }}>{children}</p>,
                                                         strong: ({children}) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
@@ -550,20 +533,12 @@ const ChatBotPage: React.FC = () => {
                                                 >
                                                     {message.text}
                                                 </ReactMarkdown>
-                                            )}
                                             {message.id === currentlyStreamingMessageId && (
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '8px' }}>
                                                     <TypingDot />
                                                     <TypingDot />
                                                     <TypingDot />
                                                 </span>
-                                            )}
-                                            {message.hasJobButton && (
-                                                <>
-                                                    <ViewJobsButton onClick={handleViewJobs}>
-                                                        <strong>Click to View</strong> Jobs
-                                                    </ViewJobsButton>
-                                                </>
                                             )}
                                             {message.sources && message.sources.length > 0 && (
                                                 <>
@@ -591,6 +566,9 @@ const ChatBotPage: React.FC = () => {
                                                 </>
                                             )}
                                         </BotMessageBubble>
+                                        {message.jobs && message.jobs.length > 0 && (
+                                            <JobGrid jobs={message.jobs} />
+                                        )}
                                         <Timestamp>{formatTime(message.timestamp)}</Timestamp>
                                     </BotContentWrapper>
                                 </BotMessageWrapper>
@@ -637,14 +615,6 @@ const ChatBotPage: React.FC = () => {
                     </SendButton>
                 </InputWrapper>
             </InputContainer>
-            
-            {showJobPopup && (
-                <JobPopup 
-                    jobs={jobs} 
-                    onClose={() => setShowJobPopup(false)}
-                    selectedJobRole={jobs.length > 0 ? jobs[0].title : undefined}
-                />
-            )}
         </ChatContainer>
     );
 };
