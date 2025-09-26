@@ -162,7 +162,8 @@ echo "Creating CodeBuild project: $PROJECT_NAME"
 ENVIRONMENT='{
   "type": "LINUX_CONTAINER",
   "image": "aws/codebuild/amazonlinux-x86_64-standard:5.0",
-  "computeType": "BUILD_GENERAL1_SMALL",
+  "computeType": "BUILD_GENERAL1_MEDIUM",
+  "privilegedMode": true,
   "environmentVariables": [
     {
       "name":  "GITHUB_TOKEN",
