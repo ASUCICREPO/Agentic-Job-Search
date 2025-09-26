@@ -17,20 +17,21 @@ clean_url=${clean_url%/}
 # 3) Extract the path part (owner/repo) for HTTPS or SSH URLs
 if [[ $clean_url =~ ^https://github\.com/([^/]+/[^/]+)$ ]]; then
   path="${BASH_REMATCH[1]}"
+  # 4) Split into owner and repo
+  GITHUB_OWNER=${path%%/*}
+  GITHUB_REPO=${path##*/}
 elif [[ $clean_url =~ ^git@github\.com:([^/]+/[^/]+)$ ]]; then
   path="${BASH_REMATCH[1]}"
+  # 4) Split into owner and repo
+  GITHUB_OWNER=${path%%/*}
+  GITHUB_REPO=${path##*/}
 else
   echo "Unable to parse owner/repo from '$GITHUB_URL'"
   read -rp "Enter GitHub owner manually: " GITHUB_OWNER
   read -rp "Enter GitHub repo  manually: " GITHUB_REPO
   echo "→ Using GITHUB_OWNER=$GITHUB_OWNER"
   echo "→ Using GITHUB_REPO=$GITHUB_REPO"
-  exit 0
 fi
-
-# 4) Split into owner and repo
-GITHUB_OWNER=${path%%/*}
-GITHUB_REPO=${path##*/}
 
 # 5) Confirm detection
 echo "Detected GitHub Owner: $GITHUB_OWNER"
