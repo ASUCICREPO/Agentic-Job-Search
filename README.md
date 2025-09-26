@@ -70,7 +70,6 @@ The application features a serverless architecture built on AWS services, with r
    - Ensure permissions to create and manage AWS resources like S3, Lambda, Bedrock, DynamoDB, Amplify, SQS, SNS, SES, EventBridge, etc.
    - [AWS IAM Policies and Permissions](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html)
 
-
 ## Deployment Using AWS CodeBuild and AWS Cloudshell
 ### Prerequisites
 
@@ -182,7 +181,7 @@ Once the infrastructure is deployed using either of the two approaches:
    - Select the app created by the stack
    - Access the application URL provided by Amplify
 
-3. Using the Application:
+5. Using the Application:
    - Navigate to the Amplify URL
    - Start by setting up your profile with optional resume upload
    - Choose your job search preferences (part-time, full-time, internships, etc.)
