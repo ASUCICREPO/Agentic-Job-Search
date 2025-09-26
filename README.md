@@ -260,14 +260,6 @@ AWS Services:
 - EventBridge: Scheduled daily processing automation
 - Amplify: Front-end hosting and deployment
 
-## 🤝 Contributing
-
-1. Follow TypeScript strict mode with explicit types
-2. Use functional React components with hooks
-3. Implement Python type hints and docstrings
-4. Follow PascalCase for components, camelCase for utilities
-5. External imports first, then relative imports
-
 ## 📄 License
 
 See LICENSE file for details.
