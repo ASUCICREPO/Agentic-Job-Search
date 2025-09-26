@@ -94,10 +94,54 @@ else
     --assume-role-policy-document "$TRUST_DOC" \
     --query 'Role.Arn' --output text)
 
-  echo "Attaching AdministratorAccess policy..."
+  echo "Creating and attaching custom CDK deployment policy..."
+
+  # Create custom policy with minimum required permissions for CDK deployment
+  CUSTOM_POLICY_NAME="${PROJECT_NAME}-cdk-policy"
+  CUSTOM_POLICY_ARN=$(aws iam create-policy \
+    --policy-name "$CUSTOM_POLICY_NAME" \
+    --policy-document '{
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "cloudformation:*",
+            "iam:*",
+            "lambda:*",
+            "dynamodb:*",
+            "s3:*",
+            "bedrock:*",
+            "bedrock-agentcore:*",
+            "sqs:*",
+            "sns:*",
+            "ses:*",
+            "events:*",
+            "ecr:*",
+            "secretsmanager:*",
+            "amplify:*",
+            "codebuild:*",
+            "logs:*",
+            "apigateway:*",
+            "ssm:*"
+          ],
+          "Resource": "*"
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "sts:AssumeRole"
+          ],
+          "Resource": "arn:aws:iam::*:role/cdk-*"
+        }
+      ]
+    }' \
+    --query 'Policy.Arn' --output text)
+
+  echo "Attaching custom policy: $CUSTOM_POLICY_ARN"
   aws iam attach-role-policy \
     --role-name "$ROLE_NAME" \
-    --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+    --policy-arn "$CUSTOM_POLICY_ARN"
 
   # Wait for propagation
   echo "✓ IAM role created"
