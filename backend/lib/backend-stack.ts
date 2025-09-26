@@ -151,10 +151,12 @@ export class jobsearch1 extends cdk.Stack {
       }),
     });
 
-    // Create SES Email Identity
-    new ses.EmailIdentity(this, "SenderIdentity", {
-      identity: ses.Identity.email(senderEmail),
-    });
+    // Import existing SES Email Identity (already exists in AWS)
+    const senderIdentity = ses.EmailIdentity.fromEmailIdentityName(
+      this, 
+      'SenderIdentity', 
+      senderEmail
+    );
 
     const JobsBucket = new s3.Bucket(this, "JobsBucket", {
       enforceSSL: true,
@@ -387,38 +389,35 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     // Notification Sender Lambda for 9 AM daily notifications
-    const notificationSenderLambda = new lambda.Function(
-      this,
-      "NotificationSenderLambda",
-      {
-        runtime: lambda.Runtime.PYTHON_3_11,
-        handler: "index.lambda_handler",
-        code: lambda.Code.fromAsset(
-          path.join(__dirname, "..", "lambda", "notification-sender")
-        ),
-        timeout: cdk.Duration.minutes(5),
-        architecture: lambdaArchitecture,
-        environment: {
-          DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
-          JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
-          SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
-          SENDER_EMAIL: senderEmail,
-        },
-      }
-    );
+    const notificationSenderLambda = new lambda.Function(this, 'NotificationSenderLambda', {
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'index.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'notification-sender')),
+      timeout: cdk.Duration.minutes(5),
+      architecture: lambdaArchitecture,
+      environment: {
+        // ENHANCEMENT: Updated environment variables for communication batch process
+        STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
+        JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
+        SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
+        SENDER_EMAIL: senderEmail,
+      },
+    });
 
     // Grant permissions for notification sender
     StudentProfileTable.grantReadData(notificationSenderLambda);
     JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
     smsNotificationTopic.grantPublish(notificationSenderLambda);
 
-    notificationSenderLambda.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["ses:SendEmail", "ses:SendRawEmail"],
-        resources: ["*"],
-      })
-    );
+    // Grant SES permissions - broader permissions needed for sending emails
+    notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+      resources: ['*'], // SES requires broader permissions for sending
+    }));
+
+    // Add dependency to ensure SES identity is created first
+    notificationSenderLambda.node.addDependency(senderIdentity);
 
     notificationSenderLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -486,11 +485,18 @@ export class jobsearch1 extends cdk.Stack {
       exportName: "SQSQueueUrl",
     });
 
-    // Export the table name for reference
-    new cdk.CfnOutput(this, "StudentProfileTableOutput", {
-      value: StudentProfileTable.tableName,
-      description: "DynamoDB table for storing student profiles",
-      exportName: "StudentProfileTable",
-    });
+        // Export the table name for reference
+        new cdk.CfnOutput(this, 'StudentProfileTableOutput', {
+          value: StudentProfileTable.tableName,
+          description: 'DynamoDB table for storing student profiles',
+          exportName: 'StudentProfileTable',
+        });
+
+        new cdk.CfnOutput(this, 'SenderEmailOutput', {
+          value: senderEmail,
+          description: 'SES sender email identity',
+          exportName: 'SenderEmail',
+        });
+
   }
 }
