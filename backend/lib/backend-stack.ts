@@ -60,96 +60,6 @@ export class jobsearch1 extends cdk.Stack {
       }
     );
 
-    const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
-      sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
-        owner: githubOwner,
-        repository: githubRepo,
-        oauthToken: githubToken_secret_manager.secretValue,
-      }),
-      buildSpec: cdk.aws_codebuild.BuildSpec.fromObjectToYaml({
-        version: "1.0",
-        frontend: {
-          phases: {
-            preBuild: {
-              commands: ["cd frontend", "npm ci"],
-            },
-            build: {
-              commands: ["npm run build"],
-            },
-          },
-          artifacts: {
-            baseDirectory: "frontend/build",
-            files: ["**/*"],
-          },
-          cache: {
-            paths: ["frontend/node_modules/**/*"],
-          },
-        },
-      }),
-      customRules: [
-        {
-          source:
-            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/job-options",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/chatbot",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-      ],
-    });
-
-    const mainBranch = amplifyApp.addBranch("main", {
-      autoBuild: true,
-      stage: "PRODUCTION",
-    });
-
-    githubToken_secret_manager.grantRead(amplifyApp);
-
-    new AwsCustomResource(this, "TriggerAmplifyBuild", {
-      onCreate: {
-        service: "Amplify",
-        action: "startJob",
-        parameters: {
-          appId: amplifyApp.appId,
-          branchName: mainBranch.branchName, // e.g. "main"
-          jobType: "RELEASE", // or REBUILD / RETRY / etc.
-        },
-        // ensure a new physical ID on every deploy so it actually runs each time
-        physicalResourceId: PhysicalResourceId.of(
-          `${amplifyApp.appId}-${mainBranch.branchName}-${Date.now()}`
-        ),
-      },
-      // if you also want it on updates:
-      onUpdate: {
-        service: "Amplify",
-        action: "startJob",
-        parameters: {
-          appId: amplifyApp.appId,
-          branchName: mainBranch.branchName,
-          jobType: "RELEASE",
-        },
-        physicalResourceId: PhysicalResourceId.of(
-          `${amplifyApp.appId}-${mainBranch.branchName}-${Date.now()}`
-        ),
-      },
-      policy: AwsCustomResourcePolicy.fromSdkCalls({
-        resources: [
-          // the app itself
-          `arn:aws:amplify:${this.region}:${this.account}:apps/${amplifyApp.appId}`,
-          // allow startJob on any branch/job under your "main" branch
-          `arn:aws:amplify:${this.region}:${this.account}:apps/${amplifyApp.appId}/branches/${mainBranch.branchName}/jobs/*`,
-        ],
-      }),
-    });
-
     // Create SES Email Identity
     new ses.EmailIdentity(this, "SenderIdentity", {
       identity: ses.Identity.email(senderEmail),
@@ -533,6 +443,97 @@ export class jobsearch1 extends cdk.Stack {
     // Create access key for the frontend user
     const accessKey = new iam.AccessKey(this, "FrontendAccessKey", {
       user: frontendUser,
+    });
+
+
+    const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
+      sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
+        owner: githubOwner,
+        repository: githubRepo,
+        oauthToken: githubToken_secret_manager.secretValue,
+      }),
+      buildSpec: cdk.aws_codebuild.BuildSpec.fromObjectToYaml({
+        version: "1.0",
+        frontend: {
+          phases: {
+            preBuild: {
+              commands: ["cd frontend", "npm ci"],
+            },
+            build: {
+              commands: ["npm run build"],
+            },
+          },
+          artifacts: {
+            baseDirectory: "frontend/build",
+            files: ["**/*"],
+          },
+          cache: {
+            paths: ["frontend/node_modules/**/*"],
+          },
+        },
+      }),
+      customRules: [
+        {
+          source:
+            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/job-options",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/chatbot",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+      ],
+    });
+
+    const mainBranch = amplifyApp.addBranch("main", {
+      autoBuild: true,
+      stage: "PRODUCTION",
+    });
+
+    githubToken_secret_manager.grantRead(amplifyApp);
+
+    new AwsCustomResource(this, "TriggerAmplifyBuild", {
+      onCreate: {
+        service: "Amplify",
+        action: "startJob",
+        parameters: {
+          appId: amplifyApp.appId,
+          branchName: mainBranch.branchName, // e.g. "main"
+          jobType: "RELEASE", // or REBUILD / RETRY / etc.
+        },
+        // ensure a new physical ID on every deploy so it actually runs each time
+        physicalResourceId: PhysicalResourceId.of(
+          `${amplifyApp.appId}-${mainBranch.branchName}-${Date.now()}`
+        ),
+      },
+      // if you also want it on updates:
+      onUpdate: {
+        service: "Amplify",
+        action: "startJob",
+        parameters: {
+          appId: amplifyApp.appId,
+          branchName: mainBranch.branchName,
+          jobType: "RELEASE",
+        },
+        physicalResourceId: PhysicalResourceId.of(
+          `${amplifyApp.appId}-${mainBranch.branchName}-${Date.now()}`
+        ),
+      },
+      policy: AwsCustomResourcePolicy.fromSdkCalls({
+        resources: [
+          // the app itself
+          `arn:aws:amplify:${this.region}:${this.account}:apps/${amplifyApp.appId}`,
+          // allow startJob on any branch/job under your "main" branch
+          `arn:aws:amplify:${this.region}:${this.account}:apps/${amplifyApp.appId}/branches/${mainBranch.branchName}/jobs/*`,
+        ],
+      }),
     });
 
     // Add environment variables to Amplify branch
