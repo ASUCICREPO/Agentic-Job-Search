@@ -6,6 +6,7 @@ import * as ecrAssets from "aws-cdk-lib/aws-ecr-assets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as os from "os";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as s3Deployment from "aws-cdk-lib/aws-s3-deployment";
 import { bedrock as bedrock } from "@cdklabs/generative-ai-cdk-constructs";
 import { ContextEnrichment } from "@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock";
 import * as path from "path";
@@ -17,11 +18,7 @@ import * as sns from "aws-cdk-lib/aws-sns";
 import * as ses from "aws-cdk-lib/aws-ses";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as amplify from "@aws-cdk/aws-amplify-alpha";
-import {
-  AwsCustomResource,
-  AwsCustomResourcePolicy,
-  PhysicalResourceId,
-} from "aws-cdk-lib/custom-resources";
+import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId,} from "aws-cdk-lib/custom-resources";
 
 export class jobsearch1 extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -44,6 +41,8 @@ export class jobsearch1 extends cdk.Stack {
 
     const hostArchitecture = os.arch();
     console.log(`Host architecture: ${hostArchitecture}`);
+
+    const timestamp = Date.now();
 
     const lambdaArchitecture =
       hostArchitecture === "arm64"
@@ -180,6 +179,49 @@ export class jobsearch1 extends cdk.Stack {
       ],
     });
 
+    const CarrierResoucesBucket = new s3.Bucket(this, "CarrierResoucesBucket", {
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      publicReadAccess: true,
+      cors: [
+        {
+          allowedHeaders: ["*"],
+          allowedMethods: [
+            s3.HttpMethods.GET,
+            s3.HttpMethods.HEAD,
+            s3.HttpMethods.PUT,
+            s3.HttpMethods.POST,
+            s3.HttpMethods.DELETE,
+          ],
+          allowedOrigins: ["*"],
+          exposedHeaders: [],
+        },
+      ],
+    });
+
+    // Create public and private folder objects
+    new s3Deployment.BucketDeployment(this, "CreatePublicFolder", {
+      sources: [s3Deployment.Source.data("public/", "")],
+      destinationBucket: CarrierResoucesBucket,
+      destinationKeyPrefix: "public/",
+    });
+
+    new s3Deployment.BucketDeployment(this, "CreatePrivateFolder", {
+      sources: [s3Deployment.Source.data("private/", "")],
+      destinationBucket: CarrierResoucesBucket,
+      destinationKeyPrefix: "private/",
+    });
+
+    // Add bucket policy to allow public read access to public/ folder
+    CarrierResoucesBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.AnyPrincipal()],
+        actions: ["s3:GetObject"],
+        resources: [`${CarrierResoucesBucket.bucketArn}/public/*`],
+      })
+    );
+
     const StudentProfileTable = new dynamodb.Table(
       this,
       "StudentProfileTable",
@@ -278,11 +320,9 @@ export class jobsearch1 extends cdk.Stack {
     StudentProfileTable.grantReadWriteData(saveProfile);
 
     const kb = new bedrock.GraphKnowledgeBase(this, "JobKnowledgeBase", {
-      description:
-        "Knowledge base with jobs from multiple sources - contains all job listings updated daily",
+      description: "Knowledge base with jobs from multiple sources - contains all job listings updated daily",
       embeddingModel: bedrock.BedrockFoundationModel.TITAN_EMBED_TEXT_V2_1024,
-      instruction:
-        "You are a job search assistant. Help users find relevant job opportunities by searching through job listings. Provide accurate information about job requirements, responsibilities, and company details. Focus on matching user queries with the most relevant job postings.",
+      instruction: "You are a job search assistant. Help users find relevant job opportunities by searching through job listings. Provide accurate information about job requirements, responsibilities, and company details. Focus on matching user queries with the most relevant job postings.",
     });
 
     // Skip Docker image build for faster deployment - use existing image
@@ -360,7 +400,7 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY_ADD_HERE",
+        BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY_ADD_HERE", // One manual step to be done later
         BEDROCK_AGENTCORE_QUALIFIER: "DEFAULT",
       },
     });
@@ -441,6 +481,66 @@ export class jobsearch1 extends cdk.Stack {
     dailyNotificationRule.addTarget(
       new targets.LambdaFunction(notificationSenderLambda)
     );
+    // Create IAM role for Bedrock AgentCore execution
+    const bedrockAgentCoreExecutionRole = new iam.Role(this, "BedrockAgentCoreExecutionRole", {
+      roleName: "BedrockAgentCoreExecutionRole",
+      assumedBy: new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
+    });
+
+    // Attach managed policies
+    bedrockAgentCoreExecutionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonBedrockFullAccess")
+    );
+    bedrockAgentCoreExecutionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonDynamoDBFullAccess_v2")
+    );
+    bedrockAgentCoreExecutionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("BedrockAgentCoreFullAccess")
+    );
+
+    // Add full access policies for logs, ECR, X-Ray, and CloudWatch
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:*",
+          "ecr:*",
+          "xray:*",
+          "cloudwatch:*",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Create IAM user for frontend with minimal AgentCore InvokeAgentRuntime policy
+    const frontendUser = new iam.User(this, "FrontendUser", {
+      userName: `jobsearch-frontend-user-${timestamp}`,
+    });
+
+    // Attach minimal policy for AgentCore runtime invocation
+    frontendUser.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock-agentcore:InvokeAgentRuntime"],
+        resources: ["*"], // Can be restricted to specific agent ARNs if needed
+      })
+    );
+
+    ResumeBucket.grantWrite(frontendUser);
+    // Create access key for the frontend user
+    const accessKey = new iam.AccessKey(this, "FrontendAccessKey", {
+      user: frontendUser,
+    });
+
+    // Add environment variables to Amplify branch
+    mainBranch.addEnvironment('REACT_APP_AGENT_QUALIFIER', 'DEFAULT');
+    mainBranch.addEnvironment('REACT_APP_AGENT_RUNTIME_ARN', 'MANUALLY ADD HERE');
+    mainBranch.addEnvironment('REACT_APP_AWS_REGION', aws_region);
+    mainBranch.addEnvironment('REACT_APP_RESUME_PROCESSOR_URL', resumeProcessorUrl.url);
+    mainBranch.addEnvironment('REACT_APP_SAVE_PROFILE_URL', saveProfileUrl.url);
+    mainBranch.addEnvironment('REACT_APP_RESUME_BUCKET', ResumeBucket.bucketName);
+    mainBranch.addEnvironment('REACT_APP_AWS_ACCESS_KEY_ID', accessKey.accessKeyId);
+    mainBranch.addEnvironment('REACT_APP_AWS_SECRET_ACCESS_KEY', accessKey.secretAccessKey.unsafeUnwrap());
 
     new cdk.CfnOutput(this, "DockerImageURI", {
       value: jobSearchAgentImage.imageUri,
@@ -468,6 +568,12 @@ export class jobsearch1 extends cdk.Stack {
       exportName: "ResumeBucketName",
     });
 
+    new cdk.CfnOutput(this, "CarrierResourcesBucketName", {
+      value: CarrierResoucesBucket.bucketName,
+      description: "S3 bucket for carrier resources with public/ and private/ folders",
+      exportName: "CarrierResourcesBucketName",
+    });
+
     new cdk.CfnOutput(this, "SaveProfileUrl", {
       value: saveProfileUrl.url,
       description: "Lambda Function URL for save profile endpoint",
@@ -491,6 +597,20 @@ export class jobsearch1 extends cdk.Stack {
       value: StudentProfileTable.tableName,
       description: "DynamoDB table for storing student profiles",
       exportName: "StudentProfileTable",
+    });
+
+    // Export frontend IAM user details
+    new cdk.CfnOutput(this, "FrontendUserName", {
+      value: frontendUser.userName,
+      description: "IAM user created with minimal AgentCore InvokeAgentRuntime policy",
+      exportName: "FrontendUserName",
+    });
+
+    // Export the role ARN
+    new cdk.CfnOutput(this, "BedrockAgentCoreExecutionRoleArn", {
+      value: bedrockAgentCoreExecutionRole.roleArn,
+      description: "IAM role ARN for Bedrock AgentCore execution",
+      exportName: "BedrockAgentCoreExecutionRoleArn",
     });
   }
 }
