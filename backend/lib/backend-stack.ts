@@ -182,7 +182,7 @@ export class jobsearch1 extends cdk.Stack {
     const carrierResourcesBucket = new s3.Bucket(this, "carrierResourcesBucket", {
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
       cors: [
         {
           allowedHeaders: ["*"],
