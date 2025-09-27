@@ -199,11 +199,12 @@ export class jobsearch1 extends cdk.Stack {
       ],
     });
 
-    const prefixes = ['public/', 'private/', ];
+    // Create placeholder files to establish folder structure
+    const prefixes = ['public/', 'private/'];
 
     prefixes.forEach(prefix => {
       new s3deploy.BucketDeployment(this, `Deploy${prefix.replace('/', '')}`, {
-        sources: [s3deploy.Source.data(`${prefix.replace('/', '')}.placeholder`, "")],
+        sources: [s3deploy.Source.data(" ", `${prefix.replace('/', '')}.placeholder`)],
         destinationBucket: carrierResourcesBucket,
         destinationKeyPrefix: prefix,
       })
