@@ -6,7 +6,7 @@ import * as ecrAssets from "aws-cdk-lib/aws-ecr-assets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as os from "os";
 import * as s3 from "aws-cdk-lib/aws-s3";
-import * as s3Deployment from "aws-cdk-lib/aws-s3-deployment";
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import { bedrock as bedrock } from "@cdklabs/generative-ai-cdk-constructs";
 import { ContextEnrichment } from "@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock";
 import * as path from "path";
@@ -179,10 +179,10 @@ export class jobsearch1 extends cdk.Stack {
       ],
     });
 
-    const CarrierResoucesBucket = new s3.Bucket(this, "CarrierResoucesBucket", {
+    const carrierResourcesBucket = new s3.Bucket(this, "carrierResourcesBucket", {
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       cors: [
         {
           allowedHeaders: ["*"],
@@ -199,26 +199,23 @@ export class jobsearch1 extends cdk.Stack {
       ],
     });
 
-    // Create public and private folder objects
-    new s3Deployment.BucketDeployment(this, "CreatePublicFolder", {
-      sources: [s3Deployment.Source.data("public/", "")],
-      destinationBucket: CarrierResoucesBucket,
-      destinationKeyPrefix: "public/",
-    });
+    const prefixes = ['public/', 'private/', ];
 
-    new s3Deployment.BucketDeployment(this, "CreatePrivateFolder", {
-      sources: [s3Deployment.Source.data("private/", "")],
-      destinationBucket: CarrierResoucesBucket,
-      destinationKeyPrefix: "private/",
+    prefixes.forEach(prefix => {
+      new s3deploy.BucketDeployment(this, `Deploy${prefix.replace('/', '')}`, {
+        sources: [s3deploy.Source.data(`${prefix.replace('/', '')}.placeholder`, "")],
+        destinationBucket: carrierResourcesBucket,
+        destinationKeyPrefix: prefix,
+      })
     });
 
     // Add bucket policy to allow public read access to public/ folder
-    CarrierResoucesBucket.addToResourcePolicy(
+    carrierResourcesBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         principals: [new iam.AnyPrincipal()],
         actions: ["s3:GetObject"],
-        resources: [`${CarrierResoucesBucket.bucketArn}/public/*`],
+        resources: [`${carrierResourcesBucket.bucketArn}/public/*`],
       })
     );
 
@@ -569,7 +566,7 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, "CarrierResourcesBucketName", {
-      value: CarrierResoucesBucket.bucketName,
+      value: carrierResourcesBucket.bucketName,
       description: "S3 bucket for carrier resources with public/ and private/ folders",
       exportName: "CarrierResourcesBucketName",
     });
