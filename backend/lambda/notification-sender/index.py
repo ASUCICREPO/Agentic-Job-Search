@@ -75,13 +75,16 @@ def send_sms_notification(phone):
     try:
         # Get environment variables
         origination_number = os.environ.get('SMS_ORIGINATION_NUMBER')
-        configuration_set_name = os.environ.get('SMS_CONFIGURATION_SET_NAME')
+        configuration_set_name = os.environ.get('CONFIGURATION_SET_NAME')
+        phone_pool_id = os.environ.get('PHONE_POOL_ID')
 
         if not origination_number:
             print("Error: SMS_ORIGINATION_NUMBER environment variable not set. Please configure your verified phone number.")
+            print(f"Available env vars: PHONE_POOL_ID={phone_pool_id}, CONFIGURATION_SET_NAME={configuration_set_name}")
             return
 
-        print(f"Sending SMS to: {phone}")
+        print(f"Sending SMS to: {phone} from: {origination_number}")
+        print(f"Using pool: {phone_pool_id}, config set: {configuration_set_name}")
 
         # Prepare SMS parameters
         sms_params = {

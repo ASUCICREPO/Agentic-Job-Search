@@ -336,7 +336,7 @@ export class jobsearch1 extends cdk.Stack {
 
     // SMS Voice v2 Resources - Phone Pool and Configuration Set
     const phonePool = new cdk.CfnResource(this, "JobNotificationPhonePool", {
-      type: "AWS::PinpointSMSVoiceV2::Pool",
+      type: "AWS::SMSVoice::Pool",
       properties: {
         OriginationIdentityPoolName: "JobNotificationPhonePool",
         MessageType: "PROMOTIONAL", // Changed to PROMOTIONAL for job notifications
@@ -346,7 +346,7 @@ export class jobsearch1 extends cdk.Stack {
 
     // Configuration Set for SMS delivery tracking and logging
     const smsConfigurationSet = new cdk.CfnResource(this, "JobNotificationConfigurationSet", {
-      type: "AWS::PinpointSMSVoiceV2::ConfigurationSet",
+      type: "AWS::SMSVoice::ConfigurationSet",
       properties: {
         ConfigurationSetName: "job-notifications-config-set",
         DefaultMessageType: "PROMOTIONAL",
@@ -356,7 +356,7 @@ export class jobsearch1 extends cdk.Stack {
 
     // Protect Configuration - Security and compliance rules
     const protectConfiguration = new cdk.CfnResource(this, "JobNotificationProtectConfiguration", {
-      type: "AWS::PinpointSMSVoiceV2::ProtectConfiguration",
+      type: "AWS::SMSVoice::ProtectConfiguration",
       properties: {
         ProtectConfigurationName: "JobNotificationProtectConfig",
         DeletionProtectionEnabled: false, // Set to true in production
