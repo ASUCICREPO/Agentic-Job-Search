@@ -5,7 +5,8 @@ from boto3.dynamodb.conditions import Attr
 
 dynamodb = boto3.resource('dynamodb')
 ses = boto3.client('ses')
-sns = boto3.client('sns')
+# AWS End User Messaging SMS Voice v2 client
+sms_voice_v2 = boto3.client('pinpoint-sms-voice-v2')
 
 def lambda_handler(event, context):
     """EventBridge triggered notification sender - sends daily notifications via SES/SNS"""
@@ -70,12 +71,34 @@ def send_email_notification(email):
         print(f"Failed to send email to {email}: {str(e)}")
 
 def send_sms_notification(phone):
-    """Send SMS notification via SNS"""
+    """Send SMS notification via AWS End User Messaging SMS Voice v2"""
     try:
-        sns.publish(
-            PhoneNumber=phone,
-            Message='Your daily job recommendations are ready! Check your career portal for personalized opportunities.'
-        )
-        print(f"SMS sent to {phone}")
+        # Get environment variables
+        origination_number = os.environ.get('SMS_ORIGINATION_NUMBER')
+        configuration_set_name = os.environ.get('SMS_CONFIGURATION_SET_NAME')
+
+        if not origination_number:
+            print("Error: SMS_ORIGINATION_NUMBER environment variable not set. Please configure your verified phone number.")
+            return
+
+        print(f"Sending SMS to: {phone}")
+
+        # Prepare SMS parameters
+        sms_params = {
+            'DestinationPhoneNumber': phone,
+            'OriginationIdentity': origination_number,
+            'MessageBody': 'Your daily job recommendations are ready! Check your career portal for personalized opportunities.',
+            'MessageType': 'PROMOTIONAL'  # Can be PROMOTIONAL or TRANSACTIONAL
+        }
+
+        # Add configuration set if provided
+        if configuration_set_name:
+            sms_params['ConfigurationSetName'] = configuration_set_name
+
+        # Send SMS using SMS Voice v2
+        response = sms_voice_v2.send_text_message(**sms_params)
+
+        print(f"SMS sent to {phone}. Message ID: {response.get('MessageId', 'N/A')}")
+
     except Exception as e:
-        print(f"Failed to send SMS to {phone}: {str(e)}")
+        print(f"Failed to send SMS to {phone} via SMS Voice v2: {str(e)}")
