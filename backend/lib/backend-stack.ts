@@ -310,7 +310,7 @@ export class jobsearch1 extends cdk.Stack {
       code: lambda.Code.fromDockerBuild(
         path.join(__dirname, "..", "lambda", "sqs-processor")
       ),
-      timeout: cdk.Duration.minutes(5),
+      timeout: cdk.Duration.minutes(15),
       architecture: lambdaArchitecture,
       environment: {
         BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY_ADD_HERE", // One manual step to be done later
