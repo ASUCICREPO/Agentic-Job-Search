@@ -334,8 +334,34 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    // SMS Voice v2 configuration - using AWS SDK directly instead of CDK constructs
-    // Configuration will be handled through environment variables and SDK calls
+    // SMS Voice v2 Resources - Phone Pool and Configuration Set
+    const phonePool = new cdk.CfnResource(this, "JobNotificationPhonePool", {
+      type: "AWS::PinpointSMSVoiceV2::Pool",
+      properties: {
+        OriginationIdentityPoolName: "JobNotificationPhonePool",
+        MessageType: "PROMOTIONAL", // Changed to PROMOTIONAL for job notifications
+        DeletionProtectionEnabled: false, // Set to true in production
+      },
+    });
+
+    // Configuration Set for SMS delivery tracking and logging
+    const smsConfigurationSet = new cdk.CfnResource(this, "JobNotificationConfigurationSet", {
+      type: "AWS::PinpointSMSVoiceV2::ConfigurationSet",
+      properties: {
+        ConfigurationSetName: "job-notifications-config-set",
+        DefaultMessageType: "PROMOTIONAL",
+        DefaultSenderId: "JobSearch", // Optional: customize as needed
+      },
+    });
+
+    // Protect Configuration - Security and compliance rules
+    const protectConfiguration = new cdk.CfnResource(this, "JobNotificationProtectConfiguration", {
+      type: "AWS::PinpointSMSVoiceV2::ProtectConfiguration",
+      properties: {
+        ProtectConfigurationName: "JobNotificationProtectConfig",
+        DeletionProtectionEnabled: false, // Set to true in production
+      },
+    });
 
     // Notification Sender Lambda for 9 AM daily notifications
     const notificationSenderLambda = new lambda.Function(
@@ -354,9 +380,10 @@ export class jobsearch1 extends cdk.Stack {
           JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
           SENDER_EMAIL: senderEmail,
           AWS_REGION: aws_region,
-          // SMS Voice v2 settings - configure after deployment
-          SMS_ORIGINATION_NUMBER: "", // Add your verified phone number here
-          SMS_CONFIGURATION_SET_NAME: "job-notifications-config-set", // Optional
+          // SMS Voice v2 settings - CDK managed resources
+          PHONE_POOL_ID: phonePool.getAtt("PoolId").toString(),
+          CONFIGURATION_SET_NAME: smsConfigurationSet.getAtt("ConfigurationSetName").toString(),
+          SMS_ORIGINATION_NUMBER: "", // Add your phone number here after requesting via console/API
         },
       }
     );
@@ -382,7 +409,9 @@ export class jobsearch1 extends cdk.Stack {
           "sms-voice:SendVoiceMessage",
           "sms-voice:DescribeConfigurationSets",
           "sms-voice:DescribePools",
-          "sms-voice:ListPools"
+          "sms-voice:ListPools",
+          "sms-voice:DescribePhoneNumbers",
+          "sms-voice:ListPoolOriginationIdentities"
         ],
         resources: ["*"],
       })
@@ -601,6 +630,25 @@ export class jobsearch1 extends cdk.Stack {
       value: jobNotificationQueue.queueUrl,
       description: "SQS Queue URL for job notifications",
       exportName: "SQSQueueUrl",
+    });
+
+    // Export SMS Voice v2 resource details
+    new cdk.CfnOutput(this, "PhonePoolId", {
+      value: phonePool.getAtt("PoolId").toString(),
+      description: "Phone Pool ID for SMS Voice v2 - add your phone numbers to this pool",
+      exportName: "PhonePoolId",
+    });
+
+    new cdk.CfnOutput(this, "SMSConfigurationSetName", {
+      value: smsConfigurationSet.getAtt("ConfigurationSetName").toString(),
+      description: "Configuration Set Name for SMS delivery tracking",
+      exportName: "SMSConfigurationSetName",
+    });
+
+    new cdk.CfnOutput(this, "ProtectConfigurationId", {
+      value: protectConfiguration.getAtt("ProtectConfigurationId").toString(),
+      description: "Protect Configuration ID for SMS compliance rules",
+      exportName: "ProtectConfigurationId",
     });
 
     // Export the table name for reference
