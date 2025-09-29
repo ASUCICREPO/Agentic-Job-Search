@@ -334,10 +334,8 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    // SNS Topic for SMS notifications
-    const smsNotificationTopic = new sns.Topic(this, "SMSNotificationTopic", {
-      displayName: "Job Notification SMS Topic",
-    });
+    // SMS Voice v2 configuration - using AWS SDK directly instead of CDK constructs
+    // Configuration will be handled through environment variables and SDK calls
 
     // Notification Sender Lambda for 9 AM daily notifications
     const notificationSenderLambda = new lambda.Function(
@@ -354,8 +352,11 @@ export class jobsearch1 extends cdk.Stack {
         environment: {
           DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
           JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
-          SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
           SENDER_EMAIL: senderEmail,
+          AWS_REGION: aws_region,
+          // SMS Voice v2 settings - configure after deployment
+          SMS_ORIGINATION_NUMBER: "", // Add your verified phone number here
+          SMS_CONFIGURATION_SET_NAME: "job-notifications-config-set", // Optional
         },
       }
     );
@@ -363,7 +364,6 @@ export class jobsearch1 extends cdk.Stack {
     // Grant permissions for notification sender
     StudentProfileTable.grantReadData(notificationSenderLambda);
     JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
-    smsNotificationTopic.grantPublish(notificationSenderLambda);
 
     notificationSenderLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -373,10 +373,17 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
+    // Grant SMS Voice v2 permissions
     notificationSenderLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ["sns:Publish"],
+        actions: [
+          "sms-voice:SendTextMessage",
+          "sms-voice:SendVoiceMessage",
+          "sms-voice:DescribeConfigurationSets",
+          "sms-voice:DescribePools",
+          "sms-voice:ListPools"
+        ],
         resources: ["*"],
       })
     );
