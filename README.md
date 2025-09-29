@@ -92,6 +92,8 @@ The script would prompt you for variables needed for deployment.
 ./deploy.sh
 ```
 
+4. **Post-Deployment Setup**: After CodeBuild deployment completes, follow the [Post-Deployment Setup Guide](docs/POST_DEPLOYMENT_SETUP.md) to configure Knowledge Bases, AgentCore Memory, and update environment variables.
+
 ## Manual CDK Deployment
 ### Prerequisites
 
@@ -157,6 +159,8 @@ cdk deploy --all \
   -c githubRepo=Agentic-Job-Search
 ```
 
+6. **Post-Deployment Setup**: After manual deployment completes, follow the [Post-Deployment Setup Guide](docs/POST_DEPLOYMENT_SETUP.md) to configure Knowledge Bases, AgentCore Memory, and update environment variables.
+
 ## Usage
 
 Once the infrastructure is deployed using either of the two approaches:
@@ -208,38 +212,35 @@ The application features a serverless architecture with automated daily job proc
   - **1.3** User submits natural language job search queries
   - **1.4** Amplify displays AI responses with job recommendations
 
-- **Amplify → Amazon API Gateway**
-  - **2.1** API Gateway receives requests from Amplify front-end
-  - **2.2** Routes requests to appropriate Lambda functions
 
 - **Resume Processing Pipeline**
-  - **3.1** Resume parser Lambda uses Claude 3.5 Sonnet to extract skills and experience
-  - **3.2** Parsed data stored in DynamoDB for personalized job matching
+  - **2.1** Resume parser Lambda uses Nova Pro to extract skills and experience
+  - **2.2** Parsed data stored in DynamoDB for personalized job matching
 
 - **Real-time Job Search**
-  - **4.1** Job search queries processed by Strands Agents via AWS Bedrock
-  - **4.2** Multi-agent system routes between Job Search and Career Advice agents
-  - **4.3** Job Search agent queries knowledge base with job listings from JobsBucket
-  - **4.4** Career Advice agent queries knowledge base with career resources from CareerResourcesBucket
-  - **4.5** Responses include job listings, career guidance, and source citations
+  - **3.1** Job search queries processed by Strands Agents via AWS Bedrock
+  - **3.2** Multi-agent system routes between Job Search and Career Advice agents
+  - **3.3** Job Search agent queries knowledge base with job listings from JobsBucket
+  - **3.4** Career Advice agent queries knowledge base with career resources from CareerResourcesBucket
+  - **3.5** Responses include job listings, career guidance, and source citations
 
 - **Automated Daily Job Processing**
-  - **5.1** EventBridge triggers batch processor Lambda at 1 AM MST
-  - **5.2** Scans all users with notification opt-in from DynamoDB
-  - **5.3** Generates SQS messages for individual personalized job searches
-  - **5.4** SQS processor invokes Bedrock AgentCore for each user
-  - **5.5** Job recommendations stored in DynamoDB
+  - **4.1** EventBridge triggers batch processor Lambda at 1 AM MST
+  - **4.2** Scans all users with notification opt-in from DynamoDB
+  - **4.3** Generates SQS messages for individual personalized job searches
+  - **4.4** SQS processor invokes Bedrock AgentCore for each user
+  - **4.5** Job recommendations stored in DynamoDB
 
 - **Daily Notification Delivery**
-  - **6.1** EventBridge triggers notification sender Lambda at 9 AM MST
-  - **6.2** Retrieves personalized job recommendations from DynamoDB
-  - **6.3** Sends customized emails via Amazon SES
-  - **6.4** Optional SMS notifications via Amazon SNS
+  - **5.1** EventBridge triggers notification sender Lambda at 9 AM MST
+  - **5.2** Retrieves personalized job recommendations from DynamoDB
+  - **5.3** Sends customized emails via Amazon SES
+  - **5.4** Optional SMS notifications via Amazon SNS
 
 - **Data Storage & Management**
-  - **7.1** DynamoDB stores user profiles, preferences, and job recommendations
-  - **7.2** S3 buckets handle resume storage, job listings, and career resources
-  - **7.3** CloudWatch provides comprehensive logging and monitoring
+  - **6.1** DynamoDB stores user profiles, preferences, and job recommendations
+  - **6.2** S3 buckets handle resume storage, job listings, and career resources
+  - **6.3** CloudWatch provides comprehensive logging and monitoring
 
 Lambda Functions:
 - `batch-processor`: Orchestrates daily job processing workflow

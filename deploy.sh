@@ -166,7 +166,7 @@ echo "Creating CodeBuild project: $PROJECT_NAME"
 
 ENVIRONMENT='{
   "type": "LINUX_CONTAINER",
-  "image": "aws/codebuild/amazonlinux-x86_64-standard:5.0",
+  "image": "aws/codebuild/amazonlinux-aarch64-standard:3.0",
   "computeType": "BUILD_GENERAL1_MEDIUM",
   "privilegedMode": true,
   "environmentVariables": [
