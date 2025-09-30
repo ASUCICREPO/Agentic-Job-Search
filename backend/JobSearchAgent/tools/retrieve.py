@@ -66,6 +66,11 @@ from strands.types.tools import ToolResult, ToolUse
 _current_request_sources = []
 
 
+def is_public_url(url: str) -> bool:
+    """Check if URL is a public path (contains public/)"""
+    return url and "public/" in url
+
+
 
 def filter_results_by_score(results: List[Dict[str, Any]], min_score: float) -> List[Dict[str, Any]]:
     """
@@ -90,15 +95,17 @@ def extract_urls_from_results(results: List[Dict[str, Any]]) -> List[str]:
     Extract URLs from retrieve results metadata and locations.
 
     This function extracts all relevant URIs from the retrieve results including:
-    - S3 URIs from location.s3Location.uri
-    - Source URIs from metadata.x-amz-bedrock-kb-source-uri
-    - Document URIs that look like URLs
+    - S3 URIs from location.s3Location.uri (only public/ paths)
+    - Source URIs from metadata.x-amz-bedrock-kb-source-uri (only public/ paths)
+    - Document URIs that look like URLs (only public/ paths)
+
+    Only URLs containing "public/" are returned to the user.
 
     Args:
         results: List of retrieval results from Bedrock Knowledge Base
 
     Returns:
-        List of unique URLs found in the results
+        List of unique public URLs found in the results (only public/ paths)
     """
     urls = set()  # Use set to avoid duplicates
 
@@ -107,19 +114,19 @@ def extract_urls_from_results(results: List[Dict[str, Any]]) -> List[str]:
         location = result.get("location", {})
         if "s3Location" in location and "uri" in location["s3Location"]:
             uri = location["s3Location"]["uri"]
-            if uri.startswith(("s3://", "http://", "https://")):
+            if uri.startswith(("s3://", "http://", "https://")) and is_public_url(uri):
                 urls.add(uri)
 
         # Extract from metadata - source URIs
         metadata = result.get("metadata", {})
         source_uri = metadata.get("x-amz-bedrock-kb-source-uri")
-        if source_uri and source_uri.startswith(("s3://", "http://", "https://")):
+        if source_uri and source_uri.startswith(("s3://", "http://", "https://")) and is_public_url(source_uri):
             urls.add(source_uri)
 
         # Also check customDocumentLocation for any URIs
         if "customDocumentLocation" in location and "id" in location["customDocumentLocation"]:
             doc_id = location["customDocumentLocation"]["id"]
-            if doc_id.startswith(("s3://", "http://", "https://")):
+            if doc_id.startswith(("s3://", "http://", "https://")) and is_public_url(doc_id):
                 urls.add(doc_id)
 
     return list(urls)
@@ -274,7 +281,7 @@ def retrieve(
         print(f"DEBUG: Found {len(filtered_results)} results, {len(extracted_urls)} URLs: {extracted_urls}")
 
         # Store URLs and scores for current request
-        # Extract scores and associate with URLs
+        # Extract scores and associate with URLs (only public URLs)
         for result in filtered_results:
             score = result.get("score", 0.0)
             location = result.get("location", {})
@@ -286,8 +293,8 @@ def retrieve(
             elif "s3Location" in location:
                 doc_id = location["s3Location"].get("uri")
 
-            # If we have both score and doc_id, and doc_id is in extracted_urls, store it
-            if score > 0 and doc_id and doc_id in extracted_urls:
+            # Only store if it's a public URL, has a score, and is in extracted_urls
+            if score > 0 and doc_id and is_public_url(doc_id) and doc_id in extracted_urls:
                 _current_request_sources.append({
                     "url": doc_id,
                     "score": score

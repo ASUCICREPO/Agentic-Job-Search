@@ -1,202 +1,264 @@
-# ASU Agentic Job Search Platform
+# AI-Powered ASU Job Search Assistant
 
-An AI-powered job search and career services platform built for ASU students, featuring intelligent job matching with personalized career guidance through a conversational interface.
+A comprehensive chatbot application that provides intelligent job search and career guidance for ASU students, powered by AWS Bedrock
 
-## 🚀 Features
+This application combines natural language processing capabilities with a knowledge base of job listings and career resources to deliver accurate, context-aware responses to student queries. The system includes a user-friendly chat interface and automated daily job recommendations.
 
-- **Multi-Agent AI System**: Orchestrator routes queries between specialized Job Search and Career Advice agents
-- **Intelligent Job Matching**: AWS Bedrock knowledge base with semantic search using Titan embeddings
-- **Resume AI Parser**: Extracts skills and experience from uploaded resumes using Claude 3.5 Sonnet
-- **Conversational Interface**: Natural language job search with memory-aware chat sessions
-- **Automated Notifications**: Daily job recommendations via email/SMS using EventBridge scheduling
-- **Profile Management**: Comprehensive student profiles with preferences and notification settings
+The application features a serverless architecture built on AWS services, with real-time communication, secure file management, and automated processing. Key features include:
+- AI-powered responses using AWS Bedrock with Nova Pro and Claude 3.7 Sonnet
+- Automated daily job recommendations via email
+- Resume AI parsing for personalized job matching
+- Real-time chat with streaming responses
+- Automated batch processing for scalable job matching
 
-## 🏗️ Architecture
+## Architecture
 
-### Frontend (React + TypeScript)
-- **Framework**: React 18+ with TypeScript and Styled Components
-- **Routing**: React Router DOM with SPA support
-- **State Management**: React Hooks (useState, useEffect)
-- **Deployment**: AWS Amplify with GitHub CI/CD integration
+### Architecture Diagram
+*[Architecture diagram will be added here]*
 
-### Backend (AWS Serverless)
-- **Infrastructure**: AWS CDK (TypeScript) for Infrastructure as Code
-- **Runtime**: AWS Lambda (Python 3.11/3.12) with containerized agents
-- **AI Framework**: Strands Agents SDK with AWS Bedrock integration
-- **Database**: DynamoDB for profiles and job recommendations
-- **Storage**: S3 buckets for resumes and job data sources
-- **Messaging**: SQS for job processing, SNS for notifications
-- **Scheduling**: EventBridge for automated daily batch processing
+### Architecture Description
+*[Detailed architecture description will be added here, including component interactions and data flow]*
 
-### AI Components
-- **Models**: Anthropic Claude 3.5 Sonnet via AWS Bedrock
-- **Embeddings**: Amazon Titan Embed Text v2 for semantic search
-- **Memory**: Bedrock AgentCore for conversation history and personalization
-- **Knowledge Base**: AWS Bedrock with S3 data sources for job listings
+### Demo Video
+*[Demo video link will be added here]*
 
-## 🛠️ Quick Start
-
-### Prerequisites
-- Node.js 18+ and npm
-- Python 3.11+ with pip
-- AWS CLI configured with appropriate permissions
-- Docker (for containerized Lambda functions)
-- GitHub Personal Access Token for Amplify deployment
-
-### Frontend Development
-```bash
-cd frontend
-npm install
-npm start  # Starts dev server on localhost:3000
+## Repository Structure
+```
+.
+├── buildspec.yml              # AWS CodeBuild configuration Deployment
+├── backend/                   # AWS CDK infrastructure code
+│   ├── bin/                   # CDK app entry point
+│   ├── lambda/                # Lambda functions for various services
+│   │   ├── batch-processor/   # Daily job processing logic
+│   │   ├── notification-sender/ # Email notification service
+│   │   ├── resume-parser/     # Resume AI parsing handler
+│   │   ├── save-profile/       # Profile management handler
+│   │   └── sqs-processor/     # SQS job processing handler
+│   └── lib/                   # CDK stack definitions
+├── deploy.sh                  # Deployment automation script
+└── frontend/                  # React-based web application
+    ├── public/                # Static assets
+    └── src/
+        ├── components/        # React components for UI
+        ├── pages/             # Application pages
+        │   ├── ChatBotPage.tsx    # AI chat interface
+        │   ├── JobOptionsPage.tsx # Job search options
+        │   └── ProfilePage.tsx    # User profile management
+        ├── services/          # API service functions
+        └── utils/             # Utility functions
 ```
 
-### Backend Development
+# Deployment Instructions
+## Common Prerequisites
+
+- Fork this repository to your own GitHub account (required for deployment and Frontend CI/CD):
+  1. Navigate to https://github.com/ASUCICREPO/Agentic-Job-Search.git
+  2. Click the "Fork" button in the top right corner
+  3. Select your GitHub account as the destination
+  4. Wait for the forking process to complete
+  5. You'll now have your own copy at https://github.com/YOUR-USERNAME/Agentic-Job-Search
+
+- Obtain a GitHub personal access token with repo permissions (needed for CDK deployment):
+  1. Go to GitHub Settings > Developer Settings > Personal Access Tokens > Tokens (classic)
+  2. Click "Generate new token (classic)"
+  3. Give the token a name and select the "repo" and "admin:repo_hook" scope
+  4. Click "Generate token" and save the token securely
+  For detailed instructions, see:
+  - https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+
+- AWS Account Permissions
+   - Ensure permissions to create and manage AWS resources like S3, Lambda, Bedrock, DynamoDB, Amplify, SQS, SNS, SES, EventBridge, etc.
+   - [AWS IAM Policies and Permissions](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html)
+
+## Deployment Using AWS CodeBuild and AWS Cloudshell
+### Prerequisites
+
+- Have access to CodeBuild and AWS Cloudshell
+
+### Deployment
+
+1. Open AWS CloudShell in your AWS Console:
+   - Click the CloudShell icon in the AWS Console navigation bar
+   - Wait for the CloudShell environment to initialize
+
+2. Clone the repository (Make sure to have your own forked copy of the repo and replace the link with the forked repository link):
+```bash
+git clone https://github.com/<YOUR-USERNAME>/Agentic-Job-Search && cd Agentic-Job-Search/
+```
+
+3. Deploy using the deployment script (recommended):
+The script would prompt you for variables needed for deployment.
+```bash
+./deploy.sh
+```
+
+4. **Post-Deployment Setup**: After CodeBuild deployment completes, follow the [Post-Deployment Setup Guide](docs/POST_DEPLOYMENT_SETUP.md) to configure Knowledge Bases, AgentCore Memory, and update environment variables.
+
+## Manual CDK Deployment
+### Prerequisites
+
+1. **AWS CLI**: To interact with AWS services and set up credentials.
+
+   - [Install AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
+
+2. **npm**
+   - npm is required to install AWS CDK. Install npm by installing Node.js:
+     - [Download Node.js](https://nodejs.org/) (includes npm).
+   - Verify npm installation:
+     ```bash
+     npm --version
+     ```
+3. **AWS CDK**: For defining cloud infrastructure in code.
+   - [Install AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
+     ```bash
+     npm install -g aws-cdk
+     ```
+
+4. **Docker**: Required to build and run Docker images for the ECS tasks.
+   - [Install Docker](https://docs.docker.com/get-docker/)
+   - Verify installation:
+     ```bash
+     docker --version
+     ```
+
+### Deployment
+
+1. Clone the repository (Make sure to fork the repository first):
+```bash
+git clone https://github.com/<YOUR-USERNAME>/Agentic-Job-Search
+cd Agentic-Job-Search/
+```
+
+2. **Set Up Your Environment**:
+Configure AWS CLI with your AWS account credentials:
+  ```bash
+  aws configure
+  ```
+
+3. Install dependencies:
 ```bash
 cd backend
 npm install
-npm run build
-npx cdk deploy -c senderEmail=your@email.com -c githubToken=your_token -c githubOwner=your_username -c githubRepo=your_repo
 ```
 
-### Python Agent Development
+4. Bootstrap CDK:
 ```bash
-cd backend/JobSearchAgent
-pip install -r requirements.txt
-python StrandsAgents.py  # Test agents locally
+cdk bootstrap --all \
+  -c githubToken=YOUR_GITHUB_TOKEN \
+  -c githubOwner=YOUR_GITHUB_USERNAME \
+  -c senderEmail=YOUR_ADMIN_EMAIL \
+  -c githubRepo=Agentic-Job-Search
 ```
 
-## 📱 User Journey
-
-### 1. Profile Setup (`/`)
-- Optional resume upload with AI-powered parsing
-- Personal information and job preferences form
-- Notification settings for daily job alerts
-- Profile data stored in DynamoDB
-
-### 2. Job Search Options (`/job-options`)
-- Part-time jobs for students
-- Full-time positions and internships
-- Career exploration and guidance
-- Context passed to AI chat interface
-
-### 3. AI Chat Interface (`/chatbot`)
-- Natural language job search queries
-- Real-time job recommendations with fit analysis
-- Career advice with source citations
-- Interactive job popup modals
-- Memory-aware conversation continuity
-
-## 🤖 Multi-Agent System
-
-### Orchestrator Agent
-- Intent recognition and query routing
-- Context management with conversation history
-- Query enhancement using profile data
-- Response coordination between specialized agents
-
-### Job Search Agent
-- **Live Mode**: Interactive job discovery with JSON results
-- **Batch Mode**: Automated daily job matching for notifications
-- Semantic search through job listings knowledge base
-- Personalized matching based on skills and preferences
-- Performance optimized with query limits
-
-### Career Advice Agent
-- Professional development guidance
-- Career resource knowledge base integration
-- Source citations and URL references
-- Memory-aware personalized recommendations
-
-## 🔄 Automated Daily Processing
-
-### 1 AM MST - Job Processing
-- EventBridge triggers batch processor Lambda
-- Scans all users with notification opt-in
-- Generates SQS messages for individual processing
-- AgentCore processes personalized job searches
-- Results stored in DynamoDB job recommendations table
-
-### 9 AM MST - Notification Delivery
-- EventBridge triggers notification sender Lambda
-- Retrieves stored job recommendations
-- Sends personalized emails via Amazon SES
-- Optional SMS notifications via Amazon SNS
-- Respects user notification preferences
-
-## 🗄️ Data Architecture
-
-### DynamoDB Tables
-- **StudentProfileTable**: User profiles, preferences, notification settings
-- **JobRecommendationsTable**: Daily job matches with fit analysis
-
-### S3 Buckets
-- **ResumeBucket**: Uploaded resume storage with CORS configuration
-- **JobsBucket**: Job listing data source for knowledge base
-
-### Knowledge Bases
-- **Job Search KB**: Semantic job matching with Titan embeddings
-- **Career Resources KB**: Professional development guidance
-
-## 🔐 Security & Performance
-
-### Security Features
-- All S3 buckets and DynamoDB tables encrypted at rest
-- HTTPS-only communication with proper CORS configuration
-- IAM roles with least privilege principles
-- GitHub token stored securely in AWS Secrets Manager
-- Amplify app granted read access to GitHub token secret
-
-### Performance Optimizations
-- Knowledge base query limits (max 5 per search)
-- Streaming responses for real-time user interaction
-- Efficient batch processing for scalable daily job matching
-- Memory management for conversation context
-- CDK-managed ECR for optimized container deployments
-
-## 📊 Monitoring
-
-- CloudWatch Logs for comprehensive Lambda function logging
-- Error tracking and alerting across all services
-- SQS processing metrics and success rates
-- User analytics for job search patterns and effectiveness
-
-## 🚀 Deployment
-
-The application uses AWS Amplify for frontend deployment with automatic CI/CD:
-- GitHub integration with secure token management via AWS Secrets Manager
-- Automatic builds triggered by repository changes and CDK deployments
-- Custom resource triggers initial build on stack creation/updates
-- SPA routing support for React Router DOM with custom rewrite rules
-- Production-optimized builds with asset optimization and dependency caching
-
-## 📝 Environment Configuration
-
-### Required CDK Context Variables
+5. Deploy the stack:
 ```bash
-npx cdk deploy \
-  -c senderEmail=your@email.com \
-  -c githubToken=your_github_token \
-  -c githubOwner=your_github_username \
-  -c githubRepo=your_repository_name
+cdk deploy --all \
+  -c githubToken=YOUR_GITHUB_TOKEN \
+  -c githubOwner=YOUR_GITHUB_USERNAME \
+  -c senderEmail=YOUR_ADMIN_EMAIL \
+  -c githubRepo=Agentic-Job-Search
 ```
 
-### Frontend Environment Variables
-- AWS service endpoints and configuration
-- API Gateway URLs for Lambda functions
+6. **Post-Deployment Setup**: After manual deployment completes, follow the [Post-Deployment Setup Guide](docs/POST_DEPLOYMENT_SETUP.md) to configure Knowledge Bases, AgentCore Memory, and update environment variables.
 
-### Lambda Environment Variables
-- DynamoDB table names and ARNs
-- S3 bucket names
-- SQS queue URLs and SNS topic ARNs
-- Bedrock AgentCore runtime ARNs
+## Usage
 
-## 🤝 Contributing
+Once the infrastructure is deployed using either of the two approaches:
 
-1. Follow TypeScript strict mode with explicit types
-2. Use functional React components with hooks
-3. Implement Python type hints and docstrings
-4. Follow PascalCase for components, camelCase for utilities
-5. External imports first, then relative imports
+1. Upload job listings and career resources to the S3 buckets:
+   - Upload job listings (PDF/JSON files) to the JobsBucket
+   - Upload career resources (PDF files) to the CareerResourcesBucket
+
+2. Sync the Knowledge Bases:
+   - Go to AWS Console > Bedrock > Knowledge bases
+   - Select the Job Search knowledge base
+   - Click the "Sync data sources" button and wait for completion
+   - Select the Career Resources knowledge base
+   - Click the "Sync data sources" button and wait for completion
+
+3. SES Email Verification (Post-Deployment)
+   - An email will be sent from AWS to the provided admin email address for verification.
+   - If you can't find the email, check the Spam folder and verify by clicking the given link.
+
+4. Access the Frontend:
+   - Go to AWS Console > AWS Amplify
+   - Select the app created by the stack
+   - Access the application URL provided by Amplify
+
+5. Using the Application:
+   - Navigate to the Amplify URL
+   - Start by setting up your profile with optional resume upload
+   - Choose your job search preferences (part-time, full-time, internships, etc.)
+   - Use the chat interface to ask about jobs, internships, or career advice
+
+Component interactions:
+1. User submits query through chat interface
+2. Lambda function processes request and invokes Strands Agents
+3. Orchestrator routes to Job Search or Career Advice agents based on intent
+4. Job Search agent queries knowledge base with job listings from JobsBucket
+5. Career Advice agent queries knowledge base with resources from CareerResourcesBucket
+6. AI responses include job listings, career guidance, and source citations
+7. Job recommendations are stored in DynamoDB for notifications
+8. Automated daily processing generates personalized job matches
+9. Email notifications are sent via SES based on user preferences
+
+## Infrastructure
+
+The application features a serverless architecture with automated daily job processing:
+
+- **User → Amplify Front-End**
+  - **1.1** User sets up profile with optional resume upload
+  - **1.2** User selects job search preferences (part-time, full-time, internships)
+  - **1.3** User submits natural language job search queries
+  - **1.4** Amplify displays AI responses with job recommendations
+
+
+- **Resume Processing Pipeline**
+  - **2.1** Resume parser Lambda uses Nova Pro to extract skills and experience
+  - **2.2** Parsed data stored in DynamoDB for personalized job matching
+
+- **Real-time Job Search**
+  - **3.1** Job search queries processed by Strands Agents via AWS Bedrock
+  - **3.2** Multi-agent system routes between Job Search and Career Advice agents
+  - **3.3** Job Search agent queries knowledge base with job listings from JobsBucket
+  - **3.4** Career Advice agent queries knowledge base with career resources from CareerResourcesBucket
+  - **3.5** Responses include job listings, career guidance, and source citations
+
+- **Automated Daily Job Processing**
+  - **4.1** EventBridge triggers batch processor Lambda at 1 AM MST
+  - **4.2** Scans all users with notification opt-in from DynamoDB
+  - **4.3** Generates SQS messages for individual personalized job searches
+  - **4.4** SQS processor invokes Bedrock AgentCore for each user
+  - **4.5** Job recommendations stored in DynamoDB
+
+- **Daily Notification Delivery**
+  - **5.1** EventBridge triggers notification sender Lambda at 9 AM MST
+  - **5.2** Retrieves personalized job recommendations from DynamoDB
+  - **5.3** Sends customized emails via Amazon SES
+  - **5.4** Optional SMS notifications via Amazon SNS
+
+- **Data Storage & Management**
+  - **6.1** DynamoDB stores user profiles, preferences, and job recommendations
+  - **6.2** S3 buckets handle resume storage, job listings, and career resources
+  - **6.3** CloudWatch provides comprehensive logging and monitoring
+
+Lambda Functions:
+- `batch-processor`: Orchestrates daily job processing workflow
+- `notification-sender`: Handles email and SMS notifications
+- `resume-parser`: AI-powered resume parsing with Claude 3.5 Sonnet
+- `save-profile`: User profile creation and management
+- `sqs-processor`: Individual user job search processing
+
+AWS Services:
+- Bedrock: AI models and knowledge bases for job search and career advice
+- API Gateway: REST API endpoints for front-end communication
+- DynamoDB: User data and job recommendations storage
+- S3: Resume storage, job listings, and career resources
+- SES: Email notifications for daily job recommendations
+- SQS: Queue for batch job processing
+- SNS: SMS notifications (optional)
+- EventBridge: Scheduled daily processing automation
+- Amplify: Front-end hosting and deployment
 
 ## 📄 License
 
