@@ -6,6 +6,7 @@ import * as ecrAssets from "aws-cdk-lib/aws-ecr-assets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as os from "os";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import { bedrock as bedrock } from "@cdklabs/generative-ai-cdk-constructs";
 import { ContextEnrichment } from "@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock";
 import * as path from "path";
@@ -17,11 +18,7 @@ import * as sns from "aws-cdk-lib/aws-sns";
 import * as ses from "aws-cdk-lib/aws-ses";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as amplify from "@aws-cdk/aws-amplify-alpha";
-import {
-  AwsCustomResource,
-  AwsCustomResourcePolicy,
-  PhysicalResourceId,
-} from "aws-cdk-lib/custom-resources";
+import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId,} from "aws-cdk-lib/custom-resources";
 
 export class jobsearch1 extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -45,6 +42,8 @@ export class jobsearch1 extends cdk.Stack {
     const hostArchitecture = os.arch();
     console.log(`Host architecture: ${hostArchitecture}`);
 
+    const timestamp = Date.now();
+
     const lambdaArchitecture =
       hostArchitecture === "arm64"
         ? lambda.Architecture.ARM_64
@@ -61,102 +60,10 @@ export class jobsearch1 extends cdk.Stack {
       }
     );
 
-    const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
-      sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
-        owner: githubOwner,
-        repository: githubRepo,
-        oauthToken: githubToken_secret_manager.secretValue,
-      }),
-      buildSpec: cdk.aws_codebuild.BuildSpec.fromObjectToYaml({
-        version: "1.0",
-        frontend: {
-          phases: {
-            preBuild: {
-              commands: ["cd frontend", "npm ci"],
-            },
-            build: {
-              commands: ["npm run build"],
-            },
-          },
-          artifacts: {
-            baseDirectory: "frontend/build",
-            files: ["**/*"],
-          },
-          cache: {
-            paths: ["frontend/node_modules/**/*"],
-          },
-        },
-      }),
-      customRules: [
-        {
-          source:
-            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/job-options",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/chatbot",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-      ],
+    // Create SES Email Identity
+    const senderIdentity = new ses.EmailIdentity(this, "SenderIdentity", {
+      identity: ses.Identity.email(senderEmail),
     });
-
-    const mainBranch = amplifyApp.addBranch("main", {
-      autoBuild: true,
-      stage: "PRODUCTION",
-    });
-
-    githubToken_secret_manager.grantRead(amplifyApp);
-
-    new AwsCustomResource(this, "TriggerAmplifyBuild", {
-      onCreate: {
-        service: "Amplify",
-        action: "startJob",
-        parameters: {
-          appId: amplifyApp.appId,
-          branchName: mainBranch.branchName, // e.g. "main"
-          jobType: "RELEASE", // or REBUILD / RETRY / etc.
-        },
-        // ensure a new physical ID on every deploy so it actually runs each time
-        physicalResourceId: PhysicalResourceId.of(
-          `${amplifyApp.appId}-${mainBranch.branchName}-${Date.now()}`
-        ),
-      },
-      // if you also want it on updates:
-      onUpdate: {
-        service: "Amplify",
-        action: "startJob",
-        parameters: {
-          appId: amplifyApp.appId,
-          branchName: mainBranch.branchName,
-          jobType: "RELEASE",
-        },
-        physicalResourceId: PhysicalResourceId.of(
-          `${amplifyApp.appId}-${mainBranch.branchName}-${Date.now()}`
-        ),
-      },
-      policy: AwsCustomResourcePolicy.fromSdkCalls({
-        resources: [
-          // the app itself
-          `arn:aws:amplify:${this.region}:${this.account}:apps/${amplifyApp.appId}`,
-          // allow startJob on any branch/job under your "main" branch
-          `arn:aws:amplify:${this.region}:${this.account}:apps/${amplifyApp.appId}/branches/${mainBranch.branchName}/jobs/*`,
-        ],
-      }),
-    });
-
-    // Import existing SES Email Identity (already exists in AWS)
-    const senderIdentity = ses.EmailIdentity.fromEmailIdentityName(
-      this, 
-      'SenderIdentity', 
-      senderEmail
-    );
 
     const JobsBucket = new s3.Bucket(this, "JobsBucket", {
       enforceSSL: true,
@@ -181,6 +88,52 @@ export class jobsearch1 extends cdk.Stack {
         },
       ],
     });
+
+    const carrierResourcesBucket = new s3.Bucket(this, "carrierResourcesBucket", {
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicAcls: true,
+        ignorePublicAcls: true,
+        blockPublicPolicy: false, // Allow bucket policies
+        restrictPublicBuckets: false, // Allow public bucket policies
+      }),
+      cors: [
+        {
+          allowedHeaders: ["*"],
+          allowedMethods: [
+            s3.HttpMethods.GET,
+            s3.HttpMethods.HEAD,
+            s3.HttpMethods.PUT,
+            s3.HttpMethods.POST,
+            s3.HttpMethods.DELETE,
+          ],
+          allowedOrigins: ["*"],
+          exposedHeaders: [],
+        },
+      ],
+    });
+
+    // Create placeholder files to establish folder structure
+    const prefixes = ['public/', 'private/'];
+
+    prefixes.forEach(prefix => {
+      new s3deploy.BucketDeployment(this, `Deploy${prefix.replace('/', '')}`, {
+        sources: [s3deploy.Source.data(" ", `${prefix.replace('/', '')}.placeholder`)],
+        destinationBucket: carrierResourcesBucket,
+        destinationKeyPrefix: prefix,
+      })
+    });
+
+    // Add bucket policy to allow public read access to public/ folder
+    carrierResourcesBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.AnyPrincipal()],
+        actions: ["s3:GetObject"],
+        resources: [`${carrierResourcesBucket.bucketArn}/public/*`],
+      })
+    );
 
     const StudentProfileTable = new dynamodb.Table(
       this,
@@ -280,11 +233,9 @@ export class jobsearch1 extends cdk.Stack {
     StudentProfileTable.grantReadWriteData(saveProfile);
 
     const kb = new bedrock.GraphKnowledgeBase(this, "JobKnowledgeBase", {
-      description:
-        "Knowledge base with jobs from multiple sources - contains all job listings updated daily",
+      description: "Knowledge base with jobs from multiple sources - contains all job listings updated daily",
       embeddingModel: bedrock.BedrockFoundationModel.TITAN_EMBED_TEXT_V2_1024,
-      instruction:
-        "You are a job search assistant. Help users find relevant job opportunities by searching through job listings. Provide accurate information about job requirements, responsibilities, and company details. Focus on matching user queries with the most relevant job postings.",
+      instruction: "You are a job search assistant. Help users find relevant job opportunities by searching through job listings. Provide accurate information about job requirements, responsibilities, and company details. Focus on matching user queries with the most relevant job postings.",
     });
 
     // Skip Docker image build for faster deployment - use existing image
@@ -362,7 +313,7 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       architecture: lambdaArchitecture,
       environment: {
-        BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY_ADD_HERE",
+        BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY_ADD_HERE", // One manual step to be done later
         BEDROCK_AGENTCORE_QUALIFIER: "DEFAULT",
       },
     });
@@ -389,35 +340,40 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     // Notification Sender Lambda for 9 AM daily notifications
-    const notificationSenderLambda = new lambda.Function(this, 'NotificationSenderLambda', {
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'index.lambda_handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'notification-sender')),
-      timeout: cdk.Duration.minutes(5),
-      architecture: lambdaArchitecture,
-      environment: {
-        // ENHANCEMENT: Updated environment variables for communication batch process
-        STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
-        JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
-        SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
-        SENDER_EMAIL: senderEmail,
-      },
-    });
+    const notificationSenderLambda = new lambda.Function(
+      this,
+      "NotificationSenderLambda",
+      {
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: "index.lambda_handler",
+        code: lambda.Code.fromAsset(
+          path.join(__dirname, "..", "lambda", "notification-sender")
+        ),
+        timeout: cdk.Duration.minutes(5),
+        architecture: lambdaArchitecture,
+        environment: {
+          STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
+          JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
+          SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
+          SENDER_EMAIL: senderEmail,
+        },
+      }
+    );
+
+    notificationSenderLambda.node.addDependency(senderIdentity);
 
     // Grant permissions for notification sender
     StudentProfileTable.grantReadData(notificationSenderLambda);
     JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
     smsNotificationTopic.grantPublish(notificationSenderLambda);
 
-    // Grant SES permissions - broader permissions needed for sending emails
-    notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-      resources: ['*'], // SES requires broader permissions for sending
-    }));
-
-    // Add dependency to ensure SES identity is created first
-    notificationSenderLambda.node.addDependency(senderIdentity);
+    notificationSenderLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["ses:SendEmail", "ses:SendRawEmail"],
+        resources: ["*"],
+      })
+    );
 
     notificationSenderLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -440,6 +396,157 @@ export class jobsearch1 extends cdk.Stack {
     dailyNotificationRule.addTarget(
       new targets.LambdaFunction(notificationSenderLambda)
     );
+    // Create IAM role for Bedrock AgentCore execution
+    const bedrockAgentCoreExecutionRole = new iam.Role(this, "BedrockAgentCoreExecutionRole", {
+      roleName: "BedrockAgentCoreExecutionRole",
+      assumedBy: new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
+    });
+
+    // Attach managed policies
+    bedrockAgentCoreExecutionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonBedrockFullAccess")
+    );
+    bedrockAgentCoreExecutionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonDynamoDBFullAccess_v2")
+    );
+    bedrockAgentCoreExecutionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("BedrockAgentCoreFullAccess")
+    );
+
+    // Add full access policies for logs, ECR, X-Ray, and CloudWatch
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:*",
+          "ecr:*",
+          "xray:*",
+          "cloudwatch:*",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Create IAM user for frontend with minimal AgentCore InvokeAgentRuntime policy
+    const frontendUser = new iam.User(this, "FrontendUser", {
+      userName: `jobsearch-frontend-user-${timestamp}`,
+    });
+
+    // Attach minimal policy for AgentCore runtime invocation
+    frontendUser.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock-agentcore:InvokeAgentRuntime"],
+        resources: ["*"], // Can be restricted to specific agent ARNs if needed
+      })
+    );
+
+    ResumeBucket.grantWrite(frontendUser);
+    // Create access key for the frontend user
+    const accessKey = new iam.AccessKey(this, "FrontendAccessKey", {
+      user: frontendUser,
+    });
+
+
+    const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
+      sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
+        owner: githubOwner,
+        repository: githubRepo,
+        oauthToken: githubToken_secret_manager.secretValue,
+      }),
+      buildSpec: cdk.aws_codebuild.BuildSpec.fromObjectToYaml({
+        version: "1.0",
+        frontend: {
+          phases: {
+            preBuild: {
+              commands: ["cd frontend", "npm ci"],
+            },
+            build: {
+              commands: ["npm run build"],
+            },
+          },
+          artifacts: {
+            baseDirectory: "frontend/build",
+            files: ["**/*"],
+          },
+          cache: {
+            paths: ["frontend/node_modules/**/*"],
+          },
+        },
+      }),
+      customRules: [
+        {
+          source:
+            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/job-options",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/chatbot",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+      ],
+    });
+
+    const mainBranch = amplifyApp.addBranch("main", {
+      autoBuild: true,
+      stage: "PRODUCTION",
+    });
+
+    githubToken_secret_manager.grantRead(amplifyApp);
+
+    new AwsCustomResource(this, "TriggerAmplifyBuild", {
+      onCreate: {
+        service: "Amplify",
+        action: "startJob",
+        parameters: {
+          appId: amplifyApp.appId,
+          branchName: mainBranch.branchName, // e.g. "main"
+          jobType: "RELEASE", // or REBUILD / RETRY / etc.
+        },
+        // ensure a new physical ID on every deploy so it actually runs each time
+        physicalResourceId: PhysicalResourceId.of(
+          `${amplifyApp.appId}-${mainBranch.branchName}-${Date.now()}`
+        ),
+      },
+      // if you also want it on updates:
+      onUpdate: {
+        service: "Amplify",
+        action: "startJob",
+        parameters: {
+          appId: amplifyApp.appId,
+          branchName: mainBranch.branchName,
+          jobType: "RELEASE",
+        },
+        physicalResourceId: PhysicalResourceId.of(
+          `${amplifyApp.appId}-${mainBranch.branchName}-${Date.now()}`
+        ),
+      },
+      policy: AwsCustomResourcePolicy.fromSdkCalls({
+        resources: [
+          // the app itself
+          `arn:aws:amplify:${this.region}:${this.account}:apps/${amplifyApp.appId}`,
+          // allow startJob on any branch/job under your "main" branch
+          `arn:aws:amplify:${this.region}:${this.account}:apps/${amplifyApp.appId}/branches/${mainBranch.branchName}/jobs/*`,
+        ],
+      }),
+    });
+
+    // Add environment variables to Amplify branch
+    mainBranch.addEnvironment('REACT_APP_AGENT_QUALIFIER', 'DEFAULT');
+    mainBranch.addEnvironment('REACT_APP_AGENT_RUNTIME_ARN', 'MANUALLY ADD HERE');
+    mainBranch.addEnvironment('REACT_APP_AWS_REGION', aws_region);
+    mainBranch.addEnvironment('REACT_APP_RESUME_PROCESSOR_URL', resumeProcessorUrl.url);
+    mainBranch.addEnvironment('REACT_APP_SAVE_PROFILE_URL', saveProfileUrl.url);
+    mainBranch.addEnvironment('REACT_APP_RESUME_BUCKET', ResumeBucket.bucketName);
+    mainBranch.addEnvironment('REACT_APP_AWS_ACCESS_KEY_ID', accessKey.accessKeyId);
+    mainBranch.addEnvironment('REACT_APP_AWS_SECRET_ACCESS_KEY', accessKey.secretAccessKey.unsafeUnwrap());
 
     new cdk.CfnOutput(this, "DockerImageURI", {
       value: jobSearchAgentImage.imageUri,
@@ -467,6 +574,12 @@ export class jobsearch1 extends cdk.Stack {
       exportName: "ResumeBucketName",
     });
 
+    new cdk.CfnOutput(this, "CarrierResourcesBucketName", {
+      value: carrierResourcesBucket.bucketName,
+      description: "S3 bucket for carrier resources with public/ and private/ folders",
+      exportName: "CarrierResourcesBucketName",
+    });
+
     new cdk.CfnOutput(this, "SaveProfileUrl", {
       value: saveProfileUrl.url,
       description: "Lambda Function URL for save profile endpoint",
@@ -485,18 +598,25 @@ export class jobsearch1 extends cdk.Stack {
       exportName: "SQSQueueUrl",
     });
 
-        // Export the table name for reference
-        new cdk.CfnOutput(this, 'StudentProfileTableOutput', {
-          value: StudentProfileTable.tableName,
-          description: 'DynamoDB table for storing student profiles',
-          exportName: 'StudentProfileTable',
-        });
+    // Export the table name for reference
+    new cdk.CfnOutput(this, "StudentProfileTableOutput", {
+      value: StudentProfileTable.tableName,
+      description: "DynamoDB table for storing student profiles",
+      exportName: "StudentProfileTable",
+    });
 
-        new cdk.CfnOutput(this, 'SenderEmailOutput', {
-          value: senderEmail,
-          description: 'SES sender email identity',
-          exportName: 'SenderEmail',
-        });
+    // Export frontend IAM user details
+    new cdk.CfnOutput(this, "FrontendUserName", {
+      value: frontendUser.userName,
+      description: "IAM user created with minimal AgentCore InvokeAgentRuntime policy",
+      exportName: "FrontendUserName",
+    });
 
+    // Export the role ARN
+    new cdk.CfnOutput(this, "BedrockAgentCoreExecutionRoleArn", {
+      value: bedrockAgentCoreExecutionRole.roleArn,
+      description: "IAM role ARN for Bedrock AgentCore execution",
+      exportName: "BedrockAgentCoreExecutionRoleArn",
+    });
   }
 }

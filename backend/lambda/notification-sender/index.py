@@ -56,13 +56,15 @@ def lambda_handler(event, context):
                 'body': json.dumps('No recent job recommendations to send')
             }
         
-        # Group recommendations by user email and job category
+        # Group recommendations by user email and job category (only unsent ones)
         user_jobs_by_category = {}
         for rec in recommendations:
             email = rec.get('email')
             job_category = rec.get('jobCategory', 'general')
+            sent_to_user = rec.get('sentToUser', False)
             
-            if email and '@' in email:
+            # Only process if email exists and not yet sent to user
+            if email and '@' in email and not sent_to_user:
                 if email not in user_jobs_by_category:
                     user_jobs_by_category[email] = {}
                 if job_category not in user_jobs_by_category[email]:
@@ -87,6 +89,10 @@ def lambda_handler(event, context):
                 # Send separate email for each job category
                 for job_category, jobs in categories.items():
                     send_job_email(email, jobs, user_profile, sender_email, job_category)
+                    
+                    # Mark all job recommendations as sent after successful email
+                    mark_jobs_as_sent(jobs, job_table)
+                    
                     sent_count += 1
                     print(f"✅ Email sent to {email} for {job_category} jobs")
                     
@@ -109,6 +115,24 @@ def lambda_handler(event, context):
             'statusCode': 500,
             'body': json.dumps(error_msg)
         }
+
+def mark_jobs_as_sent(job_recommendations, job_table):
+    """Mark job recommendations as sent to user"""
+    for rec in job_recommendations:
+        try:
+            # Update the sentToUser field to True
+            job_table.update_item(
+                Key={
+                    'userJobKey': rec['userJobKey'],
+                    'createdAt': rec['createdAt']
+                },
+                UpdateExpression='SET sentToUser = :sent',
+                ExpressionAttributeValues={
+                    ':sent': True
+                }
+            )
+        except Exception as e:
+            print(f"⚠️  Failed to mark job as sent: {str(e)}")
 
 def send_job_email(email, job_recommendations, user_profile, sender_email, job_category):
     """Send email notifications using templates"""

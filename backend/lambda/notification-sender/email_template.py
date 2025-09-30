@@ -197,10 +197,6 @@ def generate_html_email(first_name, category_display, job_recommendations):
                 
                 <p style="margin-top: 20px;">Ready to take the next step? These opportunities are waiting for you!</p>
             </div>
-            
-            <div class="footer">
-                <p>© 2024 ASU Career Services | Powered by AI Job Matching</p>
-            </div>
         </div>
     </body>
     </html>
@@ -250,8 +246,6 @@ Here are your personalized {category_display.lower()} recommendations for today:
     
     text_content += """
 Ready to take the next step? These opportunities are waiting for you!
-
-© 2024 ASU Career Services | Powered by AI Job Matching
 """
     
     return text_content
