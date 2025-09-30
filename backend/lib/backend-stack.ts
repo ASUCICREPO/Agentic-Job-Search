@@ -61,7 +61,7 @@ export class jobsearch1 extends cdk.Stack {
     );
 
     // Create SES Email Identity
-    new ses.EmailIdentity(this, "SenderIdentity", {
+    const senderIdentity = new ses.EmailIdentity(this, "SenderIdentity", {
       identity: ses.Identity.email(senderEmail),
     });
 
@@ -352,13 +352,15 @@ export class jobsearch1 extends cdk.Stack {
         timeout: cdk.Duration.minutes(5),
         architecture: lambdaArchitecture,
         environment: {
-          DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
+          STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
           JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
           SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
           SENDER_EMAIL: senderEmail,
         },
       }
     );
+
+    notificationSenderLambda.node.addDependency(senderIdentity);
 
     // Grant permissions for notification sender
     StudentProfileTable.grantReadData(notificationSenderLambda);
