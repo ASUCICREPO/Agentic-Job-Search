@@ -14,7 +14,8 @@ The application features a serverless architecture built on AWS services, with r
 ## Architecture
 
 ### Architecture Diagram
-*[Architecture diagram will be added here]*
+<img width="746" height="741" alt="Screenshot 2025-10-01 at 1 46 56 PM" src="https://github.com/user-attachments/assets/272786b2-9161-4462-a97d-41e15608c61d" />
+
 
 ### Architecture Description
 *[Detailed architecture description will be added here, including component interactions and data flow]*
