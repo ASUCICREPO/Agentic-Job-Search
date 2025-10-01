@@ -519,6 +519,23 @@ const ProfilePage: React.FC = () => {
         processedValue = value.slice(0, 200);
       }
 
+      // Format phone number to +1XXXXXXXXXX format
+      if (name === 'phone') {
+        // Remove all non-digit characters
+        const digitsOnly = value.replace(/\D/g, '');
+        // If it starts with 1, remove it and add +1
+        if (digitsOnly.startsWith('1') && digitsOnly.length > 1) {
+          processedValue = '+1' + digitsOnly.slice(1);
+        } else if (digitsOnly.length > 0) {
+          // Add +1 prefix for any digits
+          processedValue = '+1' + digitsOnly;
+        } else {
+          processedValue = '';
+        }
+        // Limit to 12 characters (+1 + 10 digits)
+        processedValue = processedValue.slice(0, 12);
+      }
+
       setFormData(prev => ({ ...prev, [name]: processedValue }));
       // Clear validation errors when user starts typing
       if (validationErrors.length > 0) {
@@ -715,7 +732,7 @@ const ProfilePage: React.FC = () => {
 
             <Field>
               <Label htmlFor="phone" $required>Phone Number</Label>
-              <Input id="phone" name="phone" placeholder="Phone number" value={formData.phone} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <Input id="phone" name="phone" placeholder="+1XXXXXXXXXX (10 digits with area code)" value={formData.phone} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
