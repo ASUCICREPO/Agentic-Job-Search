@@ -47,7 +47,7 @@ def _get_live_job_search_prompt() -> str:
         "LIVE SEARCH WORKFLOW:\n"
         "1) Check if user profile exists using get_student_profile()\n"
         "2) FOR JOB SEARCH: Use the enhanced query provided by orchestrator (includes user's skills, experience, preferences)\n"
-        "3) FOR JOB SEARCH: Search for relevant job opportunities using retrieve tool with personalized criteria (MAX 5 retrieve calls)\n"
+        "3) FOR JOB SEARCH: Search for relevant job opportunities using retrieve tool with personalized criteria (MAX 2-3 retrieve calls)\n"
         "4) FOR JOB SEARCH: Extract detailed job information from search results\n"
         "5) FOR JOB SEARCH: Perform COMPREHENSIVE user fit analysis using all available information:\n"
         "   • User's conversation history and stated preferences\n"
@@ -62,8 +62,9 @@ def _get_live_job_search_prompt() -> str:
         "   • Why this job stands out for this user's profile\n"
         "7) FOR JOB SEARCH: RETURN job results as JSON array\n"
         "PERFORMANCE CONSTRAINTS:\n"
-        "• LIMIT retrieve tool calls to MAXIMUM 5 times per job search\n"
+        "• LIMIT retrieve tool calls to MAXIMUM 2-3 times per job search\n"
         "• Prioritize quality over quantity of search results\n"
+        "• Give maximum 5 results to the user per job search\n"
         "• Focus on most relevant job matches for user's profile\n"
         "• Complete search efficiently within performance limits\n\n"
         "MANDATORY RESPONSE FORMAT - JSON Array:\n"
@@ -146,7 +147,7 @@ def _get_batch_job_search_prompt() -> str:
         "   ]\n"
         "3) Return ONLY success/failure message - DO NOTHING ELSE\n\n"
         "PERFORMANCE CONSTRAINTS:\n"
-        "• LIMIT retrieve tool calls to MAXIMUM 5 times per preferred job role\n"
+        "• LIMIT retrieve tool calls to MAXIMUM 2-3 times per preferred job role\n"
         "• Prioritize quality over quantity of search results\n"
         "• Focus on most relevant job matches for user's profile\n"
         "• Complete search efficiently within performance limits\n\n"
@@ -310,7 +311,7 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
         # Create a specialized job search agent with updated system prompt
         job_search_agent = Agent(
             tools=tools,
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=system_prompt
         )
 
@@ -354,7 +355,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
         # Create a specialized career advice agent
         career_advice_agent = Agent(
             tools=tools,
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
                 f"Available Tools:\n"
@@ -422,8 +423,7 @@ class MultiAgentJobSearchSystem:
 
         self.orchestrator_agent = Agent(
             tools=tools,
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
-            # model="global.anthropic.claude-sonnet-4-20250514-v1:0",
+            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=(
                 "You are an Orchestrator Agent for a Career Services platform with full memory access.\n\n"
                 "Available Agents:\n"
