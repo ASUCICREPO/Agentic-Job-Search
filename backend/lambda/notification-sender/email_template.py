@@ -3,8 +3,10 @@ Email Template Generator for Job Recommendations
 ===============================================
 Generates HTML and text email content for job recommendation notifications.
 """
+import os
+from urllib.parse import quote
 
-def generate_html_email(first_name, category_display, job_recommendations):
+def generate_html_email(first_name, category_display, job_recommendations, user_email=None, job_category=None):
     """Generate HTML email content for job recommendations"""
     
     # Create HTML email content
@@ -197,6 +199,39 @@ def generate_html_email(first_name, category_display, job_recommendations):
                 
                 <p style="margin-top: 20px;">Ready to take the next step? These opportunities are waiting for you!</p>
             </div>
+            
+            <div class="footer">
+    """
+    
+    # Add opt-out links if user_email is provided
+    if user_email:
+        base_url = os.environ.get('AMPLIFY_APP_URL', 'https://your-amplify-app-url.com')
+        encoded_email = quote(user_email)
+        
+        # Link to opt out of all notifications
+        optout_all_url = f"{base_url}/unsubscribe?email={encoded_email}&action=all"
+        
+        # Link to opt out of specific job category
+        if job_category and job_category != 'general':
+            encoded_category = quote(job_category)
+            optout_category_url = f"{base_url}/unsubscribe?email={encoded_email}&action=category&category={encoded_category}"
+            html_content += f"""
+                <p style="font-size: 12px; margin: 5px 0;">
+                    <a href="{optout_category_url}" style="color: #666; text-decoration: underline;">Unsubscribe from {category_display} notifications</a>
+                </p>
+            """
+        
+        html_content += f"""
+                <p style="font-size: 12px; margin: 5px 0;">
+                    <a href="{optout_all_url}" style="color: #666; text-decoration: underline;">Unsubscribe from all job notifications</a>
+                </p>
+                <p style="font-size: 11px; color: #999; margin-top: 10px;">
+                    You can also manage your communication preferences (email/SMS) from the unsubscribe page.
+                </p>
+        """
+    
+    html_content += """
+            </div>
         </div>
     </body>
     </html>
@@ -205,7 +240,7 @@ def generate_html_email(first_name, category_display, job_recommendations):
     return html_content
 
 
-def generate_text_email(first_name, category_display, job_recommendations):
+def generate_text_email(first_name, category_display, job_recommendations, user_email=None, job_category=None):
     """Generate plain text email content for job recommendations"""
     
     # Create simple text version
@@ -246,7 +281,27 @@ Here are your personalized {category_display.lower()} recommendations for today:
     
     text_content += """
 Ready to take the next step? These opportunities are waiting for you!
+
 """
+    
+    # Add opt-out links if user_email is provided
+    if user_email:
+        base_url = os.environ.get('AMPLIFY_APP_URL', 'https://your-amplify-app-url.com')
+        encoded_email = quote(user_email)
+        
+        # Link to opt out of all notifications
+        optout_all_url = f"{base_url}/unsubscribe?email={encoded_email}&action=all"
+        
+        text_content += "---\n"
+        
+        # Link to opt out of specific job category
+        if job_category and job_category != 'general':
+            encoded_category = quote(job_category)
+            optout_category_url = f"{base_url}/unsubscribe?email={encoded_email}&action=category&category={encoded_category}"
+            text_content += f"Unsubscribe from {category_display} notifications: {optout_category_url}\n\n"
+        
+        text_content += f"Unsubscribe from all job notifications: {optout_all_url}\n\n"
+        text_content += "You can also manage your communication preferences (email/SMS) from the unsubscribe page.\n"
     
     return text_content
 

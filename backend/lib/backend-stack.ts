@@ -14,10 +14,10 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as sqs from "aws-cdk-lib/aws-sqs";
-import * as sns from "aws-cdk-lib/aws-sns";
 import * as ses from "aws-cdk-lib/aws-ses";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as amplify from "@aws-cdk/aws-amplify-alpha";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId,} from "aws-cdk-lib/custom-resources";
 
 export class jobsearch1 extends cdk.Stack {
@@ -163,6 +163,110 @@ export class jobsearch1 extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.DESTROY, // for production have retain
       }
     );
+
+    // API Gateway with direct DynamoDB integration for job recommendations
+    const jobRecommendationsApi = new apigateway.RestApi(this, 'JobRecommendationsApi', {
+      restApiName: 'job-recommendations-api',
+      description: 'Direct API for retrieving job recommendations from SMS links',
+      deployOptions: {
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        dataTraceEnabled: true,
+      },
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
+      },
+    });
+
+    // Create IAM role for API Gateway to access DynamoDB
+    const apiGatewayDynamoDBRole = new iam.Role(this, 'ApiGatewayDynamoDBRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+    });
+
+    // Grant the role permission to read from JobRecommendationsTable
+    JobRecommendationsTable.grantReadData(apiGatewayDynamoDBRole);
+
+    // Create resource path: /job-recommendations/{userJobKey}/{createdAt}
+    const jobRecommendationsResource = jobRecommendationsApi.root.addResource('job-recommendations');
+    const userJobKeyResource = jobRecommendationsResource.addResource('{userJobKey}');
+    const createdAtResource = userJobKeyResource.addResource('{createdAt}');
+
+    // Add GET method with direct DynamoDB integration
+    createdAtResource.addMethod('GET', new apigateway.AwsIntegration({
+      service: 'dynamodb',
+      action: 'Query',
+      options: {
+        credentialsRole: apiGatewayDynamoDBRole,
+        requestTemplates: {
+          'application/json': `{
+            "TableName": "${JobRecommendationsTable.tableName}",
+            "KeyConditionExpression": "userJobKey = :userJobKey",
+            "ExpressionAttributeValues": {
+              ":userJobKey": {
+                "S": "$util.urlDecode($input.params('userJobKey'))"
+              }
+            },
+            "ScanIndexForward": false,
+            "Limit": 1
+          }`
+        },
+        integrationResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': "'*'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+            'method.response.header.Access-Control-Allow-Methods': "'GET,OPTIONS'"
+          },
+          responseTemplates: {
+            'application/json': `{
+              "userJobKey": "$input.path('$.Items[0].userJobKey.S')",
+              "createdAt": "$input.path('$.Items[0].createdAt.S')",
+              "email": "$input.path('$.Items[0].email.S')",
+              "jobCategory": "$input.path('$.Items[0].jobCategory.S')",
+              "jobInformation": $input.json('$.Items[0].jobInformation')
+            }`
+          }
+        }, {
+          statusCode: '404',
+          selectionPattern: '.*"__type":"com.amazon.coral.validate#ValidationException".*',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': "'*'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+            'method.response.header.Access-Control-Allow-Methods': "'GET,OPTIONS'"
+          },
+          responseTemplates: {
+            'application/json': JSON.stringify({
+              error: 'Job recommendation not found',
+              userJobKey: '',
+              createdAt: '',
+              email: '',
+              jobCategory: '',
+              jobInformation: []
+            })
+          }
+        }]
+      }
+    }), {
+      methodResponses: [
+        {
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+            'method.response.header.Access-Control-Allow-Headers': true,
+            'method.response.header.Access-Control-Allow-Methods': true
+          }
+        },
+        {
+          statusCode: '404',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+            'method.response.header.Access-Control-Allow-Headers': true,
+            'method.response.header.Access-Control-Allow-Methods': true
+          }
+        }
+      ]
+    });
 
     const saveProfile = new lambda.Function(this, "saveProfile", {
       runtime: lambda.Runtime.PYTHON_3_12,
@@ -353,6 +457,7 @@ export class jobsearch1 extends cdk.Stack {
           JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
           SENDER_EMAIL: senderEmail,
           SMS_ORIGINATION_NUMBER: senderNumber,
+          // The environment variable for amplify is addded after amplify is created
         },
       }
     );
@@ -452,7 +557,6 @@ export class jobsearch1 extends cdk.Stack {
       user: frontendUser,
     });
 
-
     const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
       sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
         owner: githubOwner,
@@ -496,6 +600,11 @@ export class jobsearch1 extends cdk.Stack {
           target: "/index.html",
           status: amplify.RedirectStatus.REWRITE,
         },
+        {
+          source: "/unsubscribe",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
       ],
     });
 
@@ -503,6 +612,9 @@ export class jobsearch1 extends cdk.Stack {
       autoBuild: true,
       stage: "PRODUCTION",
     });
+
+    // Add AMPLIFY_APP_URL to notification sender Lambda using the actual Amplify domain
+    notificationSenderLambda.addEnvironment('AMPLIFY_APP_URL', `https://${amplifyApp.defaultDomain}`);
 
     githubToken_secret_manager.grantRead(amplifyApp);
 
@@ -549,9 +661,11 @@ export class jobsearch1 extends cdk.Stack {
     mainBranch.addEnvironment('REACT_APP_AWS_REGION', aws_region);
     mainBranch.addEnvironment('REACT_APP_RESUME_PROCESSOR_URL', resumeProcessorUrl.url);
     mainBranch.addEnvironment('REACT_APP_SAVE_PROFILE_URL', saveProfileUrl.url);
+    mainBranch.addEnvironment('REACT_APP_JOB_RECOMMENDATIONS_API_URL', jobRecommendationsApi.url);
     mainBranch.addEnvironment('REACT_APP_RESUME_BUCKET', ResumeBucket.bucketName);
     mainBranch.addEnvironment('REACT_APP_AWS_ACCESS_KEY_ID', accessKey.accessKeyId);
     mainBranch.addEnvironment('REACT_APP_AWS_SECRET_ACCESS_KEY', accessKey.secretAccessKey.unsafeUnwrap());
+
 
     new cdk.CfnOutput(this, "DockerImageURI", {
       value: jobSearchAgentImage.imageUri,
@@ -597,15 +711,21 @@ export class jobsearch1 extends cdk.Stack {
       exportName: "ResumeProcessorUrl",
     });
 
+    new cdk.CfnOutput(this, "JobRecommendationsApiUrl", {
+      value: jobRecommendationsApi.url,
+      description: "API Gateway URL for job recommendations lookup from SMS links",
+      exportName: "JobRecommendationsApiUrl",
+    });
+
     new cdk.CfnOutput(this, "SQSQueueUrl", {
       value: jobNotificationQueue.queueUrl,
       description: "SQS Queue URL for job notifications",
       exportName: "SQSQueueUrl",
     });
 
-    // SMS Voice v2 details - using existing phone number +14439713294
+    // SMS Voice v2 details
     new cdk.CfnOutput(this, "SMSOriginationNumber", {
-      value: "+14439713294",
+      value: senderNumber,
       description: "SMS Origination Number for job notifications (existing TEN_DLC number)",
       exportName: "SMSOriginationNumber",
     });
@@ -629,6 +749,13 @@ export class jobsearch1 extends cdk.Stack {
       value: bedrockAgentCoreExecutionRole.roleArn,
       description: "IAM role ARN for Bedrock AgentCore execution",
       exportName: "BedrockAgentCoreExecutionRoleArn",
+    });
+
+    // Export Amplify app URL
+    new cdk.CfnOutput(this, "AmplifyAppUrl", {
+      value: `https://${amplifyApp.defaultDomain}`,
+      description: "Amplify app URL for SMS links and frontend access",
+      exportName: "AmplifyAppUrl",
     });
   }
 }
