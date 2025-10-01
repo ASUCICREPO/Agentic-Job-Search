@@ -61,7 +61,7 @@ export class jobsearch1 extends cdk.Stack {
     );
 
     // Create SES Email Identity
-    new ses.EmailIdentity(this, "SenderIdentity", {
+    const senderIdentity = new ses.EmailIdentity(this, "SenderIdentity", {
       identity: ses.Identity.email(senderEmail),
     });
 
@@ -310,7 +310,7 @@ export class jobsearch1 extends cdk.Stack {
       code: lambda.Code.fromDockerBuild(
         path.join(__dirname, "..", "lambda", "sqs-processor")
       ),
-      timeout: cdk.Duration.minutes(5),
+      timeout: cdk.Duration.minutes(15),
       architecture: lambdaArchitecture,
       environment: {
         BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY_ADD_HERE", // One manual step to be done later
@@ -351,7 +351,7 @@ export class jobsearch1 extends cdk.Stack {
         timeout: cdk.Duration.minutes(5),
         architecture: lambdaArchitecture,
         environment: {
-          DYNAMODB_TABLE_NAME: StudentProfileTable.tableName,
+          STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
           JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
           SENDER_EMAIL: senderEmail,
           // AWS_REGION is automatically provided by Lambda runtime
@@ -360,6 +360,8 @@ export class jobsearch1 extends cdk.Stack {
         },
       }
     );
+
+    notificationSenderLambda.node.addDependency(senderIdentity);
 
     // Grant permissions for notification sender
     StudentProfileTable.grantReadData(notificationSenderLambda);
