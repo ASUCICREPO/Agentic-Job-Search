@@ -201,7 +201,7 @@ def send_sms_notification(phone, user_name='Job Seeker', job_recommendations=Non
 
                 link_text = f" View your {len(job_recommendations)} new {category_display} recommendations: {link_url}"
 
-        # Add opt-out link at the end
+        # Add opt-out link at the end (unsubscribe from all only)
         optout_text = ""
         if user_email:
             from urllib.parse import quote
@@ -238,8 +238,9 @@ def send_job_email(email, job_recommendations, user_profile, sender_email, job_c
     subject = f"🎯 New {category_display} Recommendations for You!"
 
     # Generate email content using templates with opt-out links
-    html_content = generate_html_email(first_name, category_display, job_recommendations, email, job_category)
-    text_content = generate_text_email(first_name, category_display, job_recommendations, email, job_category)
+    # Pass category_display as category_for_unsubscribe so the URL uses "Software Engineer" not "software-engineer"
+    html_content = generate_html_email(first_name, category_display, job_recommendations, email, job_category, category_display)
+    text_content = generate_text_email(first_name, category_display, job_recommendations, email, job_category, category_display)
 
     # Send email via SES
     ses.send_email(

@@ -613,8 +613,11 @@ export class jobsearch1 extends cdk.Stack {
       stage: "PRODUCTION",
     });
 
-    // Add AMPLIFY_APP_URL to notification sender Lambda using the actual Amplify domain
-    notificationSenderLambda.addEnvironment('AMPLIFY_APP_URL', `https://${amplifyApp.defaultDomain}`);
+    // Create Amplify app URL constant (branch-specific URL)
+    const amplifyAppUrl = `https://${mainBranch.branchName}.${amplifyApp.defaultDomain}`;
+
+    // Add AMPLIFY_APP_URL to notification sender Lambda using the branch-specific URL
+    notificationSenderLambda.addEnvironment('AMPLIFY_APP_URL', amplifyAppUrl);
 
     githubToken_secret_manager.grantRead(amplifyApp);
 
@@ -751,10 +754,10 @@ export class jobsearch1 extends cdk.Stack {
       exportName: "BedrockAgentCoreExecutionRoleArn",
     });
 
-    // Export Amplify app URL
+    // Export Amplify app URL (branch-specific)
     new cdk.CfnOutput(this, "AmplifyAppUrl", {
-      value: `https://${amplifyApp.defaultDomain}`,
-      description: "Amplify app URL for SMS links and frontend access",
+      value: amplifyAppUrl,
+      description: "Amplify app URL for SMS links and frontend access (branch-specific)",
       exportName: "AmplifyAppUrl",
     });
   }
