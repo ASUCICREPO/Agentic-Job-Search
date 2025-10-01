@@ -20,6 +20,7 @@ phases:
         -c githubToken=$GITHUB_TOKEN
         -c githubOwner=$GITHUB_OWNER
         -c senderEmail=$SENDER_EMAIL
+        -c senderNumber=$SENDER_NUMBER
         -c githubRepo=$GITHUB_REPO
 
   build:
@@ -31,6 +32,7 @@ phases:
             -c githubToken=$GITHUB_TOKEN \
             -c githubOwner=$GITHUB_OWNER \
             -c senderEmail=$SENDER_EMAIL \
+            -c senderNumber=$SENDER_NUMBER \
             -c githubRepo=$GITHUB_REPO;
         else
           echo "Deploying all CDK stacks...";
@@ -38,6 +40,7 @@ phases:
             -c githubToken=$GITHUB_TOKEN \
             -c githubOwner=$GITHUB_OWNER \
             -c senderEmail=$SENDER_EMAIL \
+            -c senderNumber=$SENDER_NUMBER \
             -c githubRepo=$GITHUB_REPO;
         fi
 
