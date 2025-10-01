@@ -63,6 +63,10 @@ if [ -z "${SENDER_EMAIL:-}" ]; then
   read -rp "Enter e-mail address where emails will be sent from (context senderEmail): " SENDER_EMAIL
 fi
 
+if [ -z "${SENDER_NUMBER:-}" ]; then
+  read -rp "Enter phone number for SMS notifications in format +19876543210 (context senderNumber): " SENDER_NUMBER
+fi
+
 if [ -z "${ACTION:-}" ]; then
   read -rp "Would you like to [deploy] or [destroy] the stacks? Type deploy or destroy " ACTION
   ACTION=$(printf '%s' "$ACTION" | tr '[:upper:]' '[:lower:]')
@@ -188,6 +192,11 @@ ENVIRONMENT='{
     {
       "name":  "SENDER_EMAIL",
       "value": "'"$SENDER_EMAIL"'",
+      "type":  "PLAINTEXT"
+    },
+    {
+      "name":  "SENDER_NUMBER",
+      "value": "'"$SENDER_NUMBER"'",
       "type":  "PLAINTEXT"
     },
     {
