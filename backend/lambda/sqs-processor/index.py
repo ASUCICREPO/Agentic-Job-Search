@@ -1,25 +1,6 @@
-"""
-ENHANCED SQS PROCESSOR LAMBDA
-=============================
-This Lambda function processes SQS messages from the batch processor and invokes AgentCore for job search.
-
-Key Enhancements Made:
-1. Fixed AgentCore response parsing (handles streaming responses correctly)
-2. Added comprehensive user profile data to job search prompts
-3. Improved error handling and logging
-4. Enhanced AgentCore invocation with proper runtime ARN
-5. Added detailed logging for debugging and monitoring
-
-Workflow:
-1. Receives SQS messages with user profile data from batch processor
-2. Creates personalized job search prompts using user profile information
-3. Invokes Bedrock AgentCore with enhanced prompts
-4. Handles streaming responses from AgentCore
-5. Logs results for monitoring and debugging
-"""
-
 import json
 import boto3
+from botocore.config import Config
 import os
 import time
 
@@ -34,8 +15,13 @@ def lambda_handler(event, context):
         print("ERROR: BEDROCK_AGENTCORE_RUNTIME_ARN environment variable not set")
         raise ValueError("Missing BEDROCK_AGENTCORE_RUNTIME_ARN configuration")
     
-    # Initialize Bedrock AgentCore client
-    client = boto3.client('bedrock-agentcore')
+    # Initialize Bedrock AgentCore client with extended timeout
+    # Batch processing can take 5-10 minutes for complex profiles with multiple job roles
+    config = Config(
+        read_timeout=900,  # 15 minutes to match Lambda timeout
+        connect_timeout=10
+    )
+    client = boto3.client('bedrock-agentcore', config=config)
     
     processed_count = 0
     failed_count = 0
@@ -106,71 +92,59 @@ Focus on quality matches that would be valuable for daily notifications. Use the
                 qualifier=qualifier
             )
             
-            # ENHANCEMENT: Process the streaming response from AgentCore
-            # AgentCore returns streaming data that needs to be handled properly
+            # CORRECT: Process AgentCore SSE (Server-Sent Events) format: "data: {json}\n\n"
             response_stream = response['response']
-            full_response = ""
-            
+            job_agent_result = None
+            buffer = ''
+
             try:
-                # Read the streaming response chunk by chunk
+                # Read streaming response and process SSE format
                 for chunk in response_stream:
                     if chunk:
                         chunk_data = chunk.decode('utf-8') if isinstance(chunk, bytes) else str(chunk)
-                        full_response += chunk_data
-                
-                print(f"AgentCore raw response for {email}: {full_response[:500]}...")  # First 500 chars
-                
-                # Try to parse as JSON if it looks like JSON
-                if full_response.strip().startswith('{') or full_response.strip().startswith('['):
-                    try:
-                        response_data = json.loads(full_response)
-                        print(f"AgentCore parsed JSON response for {email}: {type(response_data)}")
-                    except json.JSONDecodeError as json_err:
-                        print(f"JSON parsing failed for {email}, treating as text: {json_err}")
-                        response_data = {"text_response": full_response}
-                else:
-                    # Treat as plain text response
-                    response_data = {"text_response": full_response}
-                    print(f"AgentCore text response for {email}: Success")
-                
+                        buffer += chunk_data
+
+                        # Process complete lines from the buffer
+                        lines = buffer.split('\n')
+                        buffer = lines.pop() or ''  # Keep incomplete line in buffer
+
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith('data: '):
+                                try:
+                                    # Parse JSON from after "data: "
+                                    event = json.loads(line[6:])  # Remove "data: " prefix
+                                    print(f"AgentCore event for {email}: {event}")
+
+                                    # Look for job_agent_result event
+                                    if "job_agent_result" in event:
+                                        job_agent_result = event["job_agent_result"]
+                                        print(f"Found job_agent_result for {email}: {job_agent_result}")
+                                        break  # We got what we need
+
+                                except json.JSONDecodeError as json_err:
+                                    print(f"JSON decode error for line: {line} - {json_err}")
+                                    continue
+
+                        if job_agent_result:
+                            break  # Exit outer loop if we found the result
+
             except Exception as stream_err:
                 print(f"Error reading AgentCore stream for {email}: {stream_err}")
-                # Fallback: try to read as bytes
-                try:
-                    response_body = response['response'].read()
-                    if isinstance(response_body, bytes):
-                        full_response = response_body.decode('utf-8')
-                    else:
-                        full_response = str(response_body)
-                    
-                    print(f"AgentCore fallback response for {email}: {full_response[:200]}...")
-                    response_data = {"text_response": full_response}
-                    
-                except Exception as fallback_err:
-                    print(f"Fallback parsing also failed for {email}: {fallback_err}")
-                    response_data = {"error": "Failed to parse AgentCore response", "raw_error": str(fallback_err)}
-            
-            # Check if the response indicates successful job processing
-            if response_data:
-                if isinstance(response_data, dict):
-                    if "error" in response_data:
-                        print(f"AgentCore returned error for {email}: {response_data['error']}")
-                        failed_count += 1
-                    else:
-                        processed_count += 1
-                        print(f"Successfully processed job search for {email}")
-                        
-                        # Log if we got job results
-                        if "job_agent_result" in response_data or "final_result" in response_data:
-                            print(f"Job recommendations generated for {email}")
-                        elif "text_response" in response_data and len(response_data["text_response"]) > 50:
-                            print(f"Text response received for {email} (length: {len(response_data['text_response'])})")
+                # No fallback - if streaming fails, mark as failure
+
+            # Check the job_agent_result for success/failure
+            if job_agent_result:
+                result_lower = job_agent_result.lower()
+                if "error" in result_lower or "failed" in result_lower:
+                    print(f"AgentCore returned error for {email}: {job_agent_result}")
+                    failed_count += 1
                 else:
+                    print(f"Successfully processed job search for {email}: {job_agent_result}")
                     processed_count += 1
-                    print(f"Successfully processed job search for {email} (non-dict response)")
             else:
                 failed_count += 1
-                print(f"Empty response from AgentCore for {email}")
+                print(f"No job_agent_result found for {email}")
             
             # Add small delay to avoid overwhelming the service
             time.sleep(0.1)

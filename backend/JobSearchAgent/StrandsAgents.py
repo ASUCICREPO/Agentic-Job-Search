@@ -562,7 +562,6 @@ async def handle_agent_request(payload):
 
             # Return the result directly
             yield {"job_agent_result": str(batch_result)}
-            yield {"final_result": str(batch_result)}
             return
 
         # Stream the response from the orchestrator agent
