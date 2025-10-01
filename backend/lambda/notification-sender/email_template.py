@@ -6,7 +6,7 @@ Generates HTML and text email content for job recommendation notifications.
 import os
 from urllib.parse import quote
 
-def generate_html_email(first_name, category_display, job_recommendations, user_email=None, job_category=None):
+def generate_html_email(first_name, category_display, job_recommendations, user_email=None, job_category=None, category_for_unsubscribe=None):
     """Generate HTML email content for job recommendations"""
     
     # Create HTML email content
@@ -213,7 +213,9 @@ def generate_html_email(first_name, category_display, job_recommendations, user_
         
         # Link to opt out of specific job category
         if job_category and job_category != 'general':
-            encoded_category = quote(job_category)
+            # Use category_display (e.g., "Software Engineer") instead of job_category (e.g., "software-engineer")
+            category_to_encode = category_for_unsubscribe if category_for_unsubscribe else category_display
+            encoded_category = quote(category_to_encode)
             optout_category_url = f"{base_url}/unsubscribe?email={encoded_email}&action=category&category={encoded_category}"
             html_content += f"""
                 <p style="font-size: 12px; margin: 5px 0;">
@@ -240,7 +242,7 @@ def generate_html_email(first_name, category_display, job_recommendations, user_
     return html_content
 
 
-def generate_text_email(first_name, category_display, job_recommendations, user_email=None, job_category=None):
+def generate_text_email(first_name, category_display, job_recommendations, user_email=None, job_category=None, category_for_unsubscribe=None):
     """Generate plain text email content for job recommendations"""
     
     # Create simple text version
@@ -296,7 +298,9 @@ Ready to take the next step? These opportunities are waiting for you!
         
         # Link to opt out of specific job category
         if job_category and job_category != 'general':
-            encoded_category = quote(job_category)
+            # Use category_display (e.g., "Software Engineer") instead of job_category (e.g., "software-engineer")
+            category_to_encode = category_for_unsubscribe if category_for_unsubscribe else category_display
+            encoded_category = quote(category_to_encode)
             optout_category_url = f"{base_url}/unsubscribe?email={encoded_email}&action=category&category={encoded_category}"
             text_content += f"Unsubscribe from {category_display} notifications: {optout_category_url}\n\n"
         
