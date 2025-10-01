@@ -30,10 +30,12 @@ export class jobsearch1 extends cdk.Stack {
     const githubToken = this.node.tryGetContext("githubToken");
     const githubOwner = this.node.tryGetContext("githubOwner");
     const githubRepo = this.node.tryGetContext("githubRepo");
+    const senderNumber = this.node.tryGetContext("senderNumber");
 
-    if (!senderEmail || !githubToken || !githubOwner || !githubRepo)
+
+    if (!senderEmail || !githubToken || !githubOwner || !githubRepo || !senderNumber)
       throw new Error(
-        "Missing required context variable(s): senderEmail, githubToken, githubOwner, and/or githubRepo. Please provide all in CDK context (e.g., cdk deploy -c senderEmail=your@email.com -c githubToken=your_github_token -c githubOwner=your_github_owner -c githubRepo=your_github_repo)"
+        "Missing required context variable(s): senderEmail, githubToken, githubOwner, githubRepo, and/or senderNumber. Please provide all in CDK context (e.g., cdk deploy -c senderEmail=your@email.com -c githubToken=your_github_token -c githubOwner=your_github_owner -c githubRepo=your_github_repo -c senderNumber=+1234567890)"
       );
 
     const aws_region = cdk.Stack.of(this).region;
@@ -334,10 +336,6 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    // SMS Voice v2 Resources - Using existing phone number directly
-    // No need to create phone pool or configuration set for testing
-    // We'll use the existing phone number +14439713294 directly
-
     // Notification Sender Lambda for 9 AM daily notifications
     const notificationSenderLambda = new lambda.Function(
       this,
@@ -354,9 +352,7 @@ export class jobsearch1 extends cdk.Stack {
           STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
           JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
           SENDER_EMAIL: senderEmail,
-          // AWS_REGION is automatically provided by Lambda runtime
-          // SMS Voice v2 settings - using existing phone number directly
-          SMS_ORIGINATION_NUMBER: "+14439713294", // Existing active phone number (TEN_DLC, US, SMS/MMS)
+          SMS_ORIGINATION_NUMBER: senderNumber,
         },
       }
     );

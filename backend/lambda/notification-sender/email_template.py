@@ -120,7 +120,7 @@ def generate_html_email(first_name, category_display, job_recommendations):
             <div class="content">
                 <div class="greeting">Good morning, {first_name}! 👋</div>
                 
-                <p>Here are your personalized {category_display.lower()} recommendations for today:</p>
+                <p style="color: #8B1538; font-weight: 500;">Here are your personalized {category_display.lower()} recommendations for today:</p>
                 
                 <div class="job-list">
     """
