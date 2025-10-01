@@ -114,7 +114,7 @@ def lambda_handler(event, context):
                     # Send SMS if communication method is 'phone' or 'both'
                     if communication_method in ['phone', 'both'] and phone:
                         try:
-                            send_sms_notification(phone, user_profile.get('fullName', 'Job Seeker'), jobs, job_category)
+                            send_sms_notification(phone, user_profile.get('fullName', 'Job Seeker'), jobs, job_category, user_email)
                             sms_sent_count += 1
                             print(f"✅ SMS sent to {phone} for {user_email}")
                         except Exception as e:
@@ -163,7 +163,7 @@ def mark_jobs_as_sent(job_recommendations, job_table):
         except Exception as e:
             print(f"⚠️  Failed to mark job as sent: {str(e)}")
 
-def send_sms_notification(phone, user_name='Job Seeker', job_recommendations=None, job_category=None):
+def send_sms_notification(phone, user_name='Job Seeker', job_recommendations=None, job_category=None, user_email=None):
     """Send SMS notification via AWS End User Messaging SMS Voice v2 with clickable link"""
     try:
         # Get environment variables
@@ -201,11 +201,20 @@ def send_sms_notification(phone, user_name='Job Seeker', job_recommendations=Non
 
                 link_text = f" View your {len(job_recommendations)} new {category_display} recommendations: {link_url}"
 
+        # Add opt-out link at the end
+        optout_text = ""
+        if user_email:
+            from urllib.parse import quote
+            base_url = os.environ.get('AMPLIFY_APP_URL', 'https://your-amplify-app-url.com')
+            encoded_email = quote(user_email)
+            optout_url = f"{base_url}/unsubscribe?email={encoded_email}&action=all"
+            optout_text = f" To unsubscribe: {optout_url}"
+
         # Prepare SMS parameters
         sms_params = {
             'DestinationPhoneNumber': phone,
             'OriginationIdentity': origination_number,
-            'MessageBody': f'Hi {first_name}! Your daily job recommendations are ready.{link_text}',
+            'MessageBody': f'Hi {first_name}! Your daily job recommendations are ready based on your preferences.{link_text}{optout_text}',
             'MessageType': 'PROMOTIONAL'  # Can be PROMOTIONAL or TRANSACTIONAL
         }
 
@@ -228,9 +237,9 @@ def send_job_email(email, job_recommendations, user_profile, sender_email, job_c
     category_display = job_category.replace('-', ' ').title() if job_category != 'general' else 'Job'
     subject = f"🎯 New {category_display} Recommendations for You!"
 
-    # Generate email content using templates
-    html_content = generate_html_email(first_name, category_display, job_recommendations)
-    text_content = generate_text_email(first_name, category_display, job_recommendations)
+    # Generate email content using templates with opt-out links
+    html_content = generate_html_email(first_name, category_display, job_recommendations, email, job_category)
+    text_content = generate_text_email(first_name, category_display, job_recommendations, email, job_category)
 
     # Send email via SES
     ses.send_email(

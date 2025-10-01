@@ -600,6 +600,11 @@ export class jobsearch1 extends cdk.Stack {
           target: "/index.html",
           status: amplify.RedirectStatus.REWRITE,
         },
+        {
+          source: "/unsubscribe",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
       ],
     });
 
@@ -718,7 +723,7 @@ export class jobsearch1 extends cdk.Stack {
       exportName: "SQSQueueUrl",
     });
 
-    // SMS Voice v2 details - using existing phone number +
+    // SMS Voice v2 details
     new cdk.CfnOutput(this, "SMSOriginationNumber", {
       value: senderNumber,
       description: "SMS Origination Number for job notifications (existing TEN_DLC number)",
