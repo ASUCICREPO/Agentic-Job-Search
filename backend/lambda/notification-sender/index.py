@@ -12,9 +12,7 @@ Simple workflow:
 import json
 import boto3
 import os
-from datetime import datetime, timedelta
 from boto3.dynamodb.conditions import Attr
-from botocore.exceptions import ClientError
 from email_template import generate_html_email, generate_text_email
 
 # Initialize AWS clients
@@ -116,7 +114,7 @@ def lambda_handler(event, context):
                     # Send SMS if communication method is 'phone' or 'both'
                     if communication_method in ['phone', 'both'] and phone:
                         try:
-                            send_sms_notification(phone, user_profile.get('fullName', 'Job Seeker'))
+                            send_sms_notification(phone, user_profile.get('fullName', 'Job Seeker'), jobs, job_category)
                             sms_sent_count += 1
                             print(f"✅ SMS sent to {phone} for {user_email}")
                         except Exception as e:
@@ -165,8 +163,8 @@ def mark_jobs_as_sent(job_recommendations, job_table):
         except Exception as e:
             print(f"⚠️  Failed to mark job as sent: {str(e)}")
 
-def send_sms_notification(phone, user_name='Job Seeker'):
-    """Send SMS notification via AWS End User Messaging SMS Voice v2"""
+def send_sms_notification(phone, user_name='Job Seeker', job_recommendations=None, job_category=None):
+    """Send SMS notification via AWS End User Messaging SMS Voice v2 with clickable link"""
     try:
         # Get environment variables
         origination_number = os.environ.get('SMS_ORIGINATION_NUMBER')
@@ -176,15 +174,38 @@ def send_sms_notification(phone, user_name='Job Seeker'):
             return
 
         print(f"Sending SMS to: {phone} from: {origination_number}")
-        
+
         # Get first name for personalization
         first_name = user_name.split()[0] if user_name and user_name != 'Job Seeker' else 'there'
+
+        # Generate clickable link if we have job recommendations
+        link_text = ""
+        if job_recommendations and len(job_recommendations) > 0:
+            # Get the first job's parameters for the link
+            first_job = job_recommendations[0]
+            user_job_key = first_job.get('userJobKey')
+            created_at = first_job.get('createdAt')
+
+            if user_job_key and created_at:
+                # URL encode the parameters
+                from urllib.parse import quote
+                encoded_user_job_key = quote(user_job_key)
+                encoded_created_at = quote(created_at)
+
+                # Generate the link to chatbot page with parameters
+                base_url = os.environ.get('AMPLIFY_APP_URL', 'https://your-amplify-app-url.com')
+                link_url = f"{base_url}/chatbot?userJobKey={encoded_user_job_key}&createdAt={encoded_created_at}"
+
+                # Display category name nicely
+                category_display = job_category.replace('-', ' ').title() if job_category else 'Job'
+
+                link_text = f" View your {len(job_recommendations)} new {category_display} recommendations: {link_url}"
 
         # Prepare SMS parameters
         sms_params = {
             'DestinationPhoneNumber': phone,
             'OriginationIdentity': origination_number,
-            'MessageBody': f'Hi {first_name}! Your daily job recommendations are ready. Check your career portal for personalized opportunities.',
+            'MessageBody': f'Hi {first_name}! Your daily job recommendations are ready.{link_text}',
             'MessageType': 'PROMOTIONAL'  # Can be PROMOTIONAL or TRANSACTIONAL
         }
 
