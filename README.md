@@ -1,6 +1,6 @@
-# AI-Powered ASU Job Search Assistant
+# AI-Powered Job Search Assistant
 
-A comprehensive chatbot application that provides intelligent job search and career guidance for ASU students, powered by AWS Bedrock
+A comprehensive chatbot application that provides intelligent job search and career guidance for students, powered by AWS Bedrock
 
 This application combines natural language processing capabilities with a knowledge base of job listings and career resources to deliver accurate, context-aware responses to student queries. The system includes a user-friendly chat interface and automated daily job recommendations.
 
