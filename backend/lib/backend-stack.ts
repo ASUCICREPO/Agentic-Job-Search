@@ -30,10 +30,12 @@ export class jobsearch1 extends cdk.Stack {
     const githubToken = this.node.tryGetContext("githubToken");
     const githubOwner = this.node.tryGetContext("githubOwner");
     const githubRepo = this.node.tryGetContext("githubRepo");
+    const senderNumber = this.node.tryGetContext("senderNumber");
 
-    if (!senderEmail || !githubToken || !githubOwner || !githubRepo)
+
+    if (!senderEmail || !githubToken || !githubOwner || !githubRepo || !senderNumber)
       throw new Error(
-        "Missing required context variable(s): senderEmail, githubToken, githubOwner, and/or githubRepo. Please provide all in CDK context (e.g., cdk deploy -c senderEmail=your@email.com -c githubToken=your_github_token -c githubOwner=your_github_owner -c githubRepo=your_github_repo)"
+        "Missing required context variable(s): senderEmail, githubToken, githubOwner, githubRepo, and/or senderNumber. Please provide all in CDK context (e.g., cdk deploy -c senderEmail=your@email.com -c githubToken=your_github_token -c githubOwner=your_github_owner -c githubRepo=your_github_repo -c senderNumber=+1234567890)"
       );
 
     const aws_region = cdk.Stack.of(this).region;
@@ -334,11 +336,6 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    // SNS Topic for SMS notifications
-    const smsNotificationTopic = new sns.Topic(this, "SMSNotificationTopic", {
-      displayName: "Job Notification SMS Topic",
-    });
-
     // Notification Sender Lambda for 9 AM daily notifications
     const notificationSenderLambda = new lambda.Function(
       this,
@@ -354,8 +351,8 @@ export class jobsearch1 extends cdk.Stack {
         environment: {
           STUDENT_PROFILE_TABLE_NAME: StudentProfileTable.tableName,
           JOB_RECOMMENDATIONS_TABLE_NAME: JobRecommendationsTable.tableName,
-          SNS_TOPIC_ARN: smsNotificationTopic.topicArn,
           SENDER_EMAIL: senderEmail,
+          SMS_ORIGINATION_NUMBER: senderNumber,
         },
       }
     );
@@ -365,7 +362,6 @@ export class jobsearch1 extends cdk.Stack {
     // Grant permissions for notification sender
     StudentProfileTable.grantReadData(notificationSenderLambda);
     JobRecommendationsTable.grantReadWriteData(notificationSenderLambda);
-    smsNotificationTopic.grantPublish(notificationSenderLambda);
 
     notificationSenderLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -375,10 +371,19 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
+    // Grant SMS Voice v2 permissions
     notificationSenderLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ["sns:Publish"],
+        actions: [
+          "sms-voice:SendTextMessage",
+          "sms-voice:SendVoiceMessage",
+          "sms-voice:DescribeConfigurationSets",
+          "sms-voice:DescribePools",
+          "sms-voice:ListPools",
+          "sms-voice:DescribePhoneNumbers",
+          "sms-voice:ListPoolOriginationIdentities"
+        ],
         resources: ["*"],
       })
     );
@@ -596,6 +601,13 @@ export class jobsearch1 extends cdk.Stack {
       value: jobNotificationQueue.queueUrl,
       description: "SQS Queue URL for job notifications",
       exportName: "SQSQueueUrl",
+    });
+
+    // SMS Voice v2 details - using existing phone number +14439713294
+    new cdk.CfnOutput(this, "SMSOriginationNumber", {
+      value: "+14439713294",
+      description: "SMS Origination Number for job notifications (existing TEN_DLC number)",
+      exportName: "SMSOriginationNumber",
     });
 
     // Export the table name for reference
