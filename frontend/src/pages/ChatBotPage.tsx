@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { ASULogoImage, UserAvatarImage, BotAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
 import { getJobRecommendations, parseSmsLinkParams } from '../services/jobRecommendationsService';
+import { getProfile } from '../services/profileService';
 import JobGrid from '../components/JobGrid';
 import {
   ChatContainer,
@@ -143,7 +144,7 @@ const convertS3ToPublicUrl = (url: string): string => {
 const ChatBotPage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const userName = location.state?.userName || "User";
+    const [userName, setUserName] = useState<string>(location.state?.userName || "User");
     
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
@@ -183,6 +184,19 @@ const ChatBotPage: React.FC = () => {
                 try {
                     console.log('Loading job recommendations from SMS link:', params);
                     const recommendations = await getJobRecommendations(params.userJobKey, params.createdAt);
+
+                    // Load user profile to get full name
+                    if (recommendations.email) {
+                        try {
+                            const profile = await getProfile(recommendations.email);
+                            if (profile && profile.fullName && profile.fullName !== 'N/A') {
+                                setUserName(profile.fullName);
+                            }
+                        } catch (profileError) {
+                            console.error('Failed to load user profile:', profileError);
+                            // Continue with default user name
+                        }
+                    }
 
                     // Transform the DynamoDB response format to match JobGrid expectations
                     const transformedJobs = recommendations.jobInformation.map((jobItem: any) => {
