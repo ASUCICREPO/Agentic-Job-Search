@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { ASULogoImage, UserAvatarImage, BotAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
+import { getJobRecommendations, parseSmsLinkParams } from '../services/jobRecommendationsService';
+import { getProfile } from '../services/profileService';
 import JobGrid from '../components/JobGrid';
 import {
   ChatContainer,
@@ -142,7 +144,7 @@ const convertS3ToPublicUrl = (url: string): string => {
 const ChatBotPage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const userName = location.state?.userName || "User";
+    const [userName, setUserName] = useState<string>(location.state?.userName || "User");
     
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
@@ -171,6 +173,85 @@ const ChatBotPage: React.FC = () => {
             }, 1000); // Brief delay to show the transition
         }
     }, [location.state, navigate, userName]);
+
+    // Handle SMS link parameters - load job recommendations on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        const loadJobRecommendationsFromUrl = async () => {
+            const params = parseSmsLinkParams();
+
+            if (params && params.userJobKey && params.createdAt) {
+                try {
+                    console.log('Loading job recommendations from SMS link:', params);
+                    const recommendations = await getJobRecommendations(params.userJobKey, params.createdAt);
+
+                    // Load user profile to get full name
+                    if (recommendations.email) {
+                        try {
+                            const profile = await getProfile(recommendations.email);
+                            if (profile && profile.fullName && profile.fullName !== 'N/A') {
+                                setUserName(profile.fullName);
+                            }
+                        } catch (profileError) {
+                            console.error('Failed to load user profile:', profileError);
+                            // Continue with default user name
+                        }
+                    }
+
+                    // Transform the DynamoDB response format to match JobGrid expectations
+                    const transformedJobs = recommendations.jobInformation.map((jobItem: any) => {
+                        const jobData = jobItem.M || jobItem;
+
+                        return {
+                            id: Math.random().toString(36).substr(2, 9), // Generate unique ID
+                            title: jobData.title?.S || jobData.title || 'Unknown Title',
+                            description: jobData.description?.S || jobData.description || '',
+                            company: jobData.company?.S || jobData.company || '',
+                            salary_max: jobData.salary_max?.S || jobData.salary_max || '',
+                            salary_min: jobData.salary_min?.S || jobData.salary_min || '',
+                            fit: jobData.fit?.S || jobData.fit || '',
+                            location: jobData.location?.S || jobData.location || '',
+                            type: jobData.type?.S || jobData.type || '',
+                            industry: jobData.industry?.S || jobData.industry || '',
+                            deadline: jobData.deadline?.S || jobData.deadline || '',
+                            remote: jobData.remote?.S || jobData.remote || '',
+                            experience: jobData.experience?.S || jobData.experience || '',
+                            source: jobData.source?.S || jobData.source || 'Unknown',
+                            url: jobData.url?.S || jobData.url || ''
+                        };
+                    });
+
+                    // Create welcome message with job recommendations
+                    const welcomeMessage: Message = {
+                        id: Date.now(),
+                        text: `👋 Welcome back! Here are your personalized **${recommendations.jobCategory.replace('-', ' ')}** job recommendations from ${new Date(recommendations.createdAt).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                        })}:`,
+                        isUser: false,
+                        timestamp: new Date(),
+                        jobs: transformedJobs
+                    };
+
+                    setMessages([welcomeMessage]);
+
+                } catch (error) {
+                    console.error('Failed to load job recommendations:', error);
+                    const errorMessage: Message = {
+                        id: Date.now(),
+                        text: 'Sorry, I couldn\'t load your job recommendations. Please try again or contact support.',
+                        isUser: false,
+                        timestamp: new Date()
+                    };
+                    setMessages([errorMessage]);
+                }
+            }
+        };
+
+        loadJobRecommendationsFromUrl();
+    }, []); // Only run once on mount
 
     const formatTime = (date: Date) => {
         return date.toLocaleTimeString('en-US', {

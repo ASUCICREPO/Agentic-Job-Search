@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import ProfilePage from './pages/ProfilePage';
 import JobOptionsPage from './pages/JobOptionsPage';
 import ChatBotPage from './pages/ChatBotPage';
+import UnsubscribePage from './pages/UnsubscribePage';
 import { getOrCreateSessionId } from './services/agentService';
 import './App.css';
 
@@ -20,6 +21,7 @@ function App() {
           <Route path="/" element={<ProfilePage />} />
           <Route path="/job-options" element={<JobOptionsPage />} />
           <Route path="/chatbot" element={<ChatBotPage />} />
+          <Route path="/unsubscribe" element={<UnsubscribePage />} />
         </Routes>
       </div>
     </Router>
