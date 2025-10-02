@@ -124,7 +124,7 @@ The ASU Job Search Assistant implements a **serverless, event-driven architectur
 ## Deployment Using AWS CodeBuild and AWS Cloudshell
 ### Prerequisites
 
-- Set up your 10DLC number **before starting deployment**
+- Set up your 10DLC number **before starting deployment**, review the [SMS Prerequisites Guide](docs/SMS_PREREQUISITES.md) guide please.
 - Have access to CodeBuild and AWS Cloudshell
 
 ### Deployment
