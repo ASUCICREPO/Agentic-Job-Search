@@ -241,6 +241,39 @@ After uploading files, you must sync the knowledge bases to make the data search
 - If sync fails, check that your S3 buckets contain supported file formats
 - You can monitor sync progress in the knowledge base details page
 
+## Step 7: SES Email Verification
+
+1. **Check Your Email**:
+   - An email will be sent from AWS to the admin email address you provided during deployment
+   - If you can't find the email, check your Spam folder and verify by clicking the confirmation link
+
+## Step 8: Access and Use the Application
+
+1. **Access the Frontend**:
+   - Go to AWS Console > AWS Amplify
+   - Select the app created by the stack
+   - Access the application URL provided by Amplify
+
+2. **Using the Application**:
+   - **Set up your profile**: Start by creating a profile with optional resume upload
+   - **Choose job preferences**: Select your job search preferences (part-time, full-time, internships, etc.)
+   - **Use the chat interface**: Ask questions about jobs, internships, or career advice
+   - **Receive daily recommendations**: Automated job emails will be sent based on your preferences
+
+## Component Interactions
+
+The application follows this flow when users interact with it:
+
+1. User submits query through chat interface
+2. Lambda function processes request and invokes Strands Agents
+3. Orchestrator routes to Job Search or Career Advice agents based on intent
+4. Job Search agent queries knowledge base with job listings from JobsBucket
+5. Career Advice agent queries knowledge base with resources from CareerResourcesBucket
+6. AI responses include job listings, career guidance, and source citations
+7. Job recommendations are stored in DynamoDB for notifications
+8. Automated daily processing generates personalized job matches
+9. Email notifications are sent via SES based on user preferences
+
 ## Verification Steps
 
 After completing all steps above:
@@ -248,6 +281,12 @@ After completing all steps above:
 1. **Test Frontend**:
    - Access your Amplify application URL
    - Try the chat interface to ensure it's connecting properly
+
+2. **Test Full Flow**:
+   - Create a user profile with resume upload
+   - Ask job-related questions in the chat
+   - Verify that responses include relevant job listings and career advice
+   - Check that job recommendations are being stored (you can verify in DynamoDB console)
 
 ## Troubleshooting
 
