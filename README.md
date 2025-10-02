@@ -14,7 +14,7 @@ The application features a serverless architecture built on AWS services, with r
 ## Architecture
 
 ### Architecture Diagram
-<img width="746" height="741" alt="Screenshot 2025-10-01 at 1 46 56 PM" src="https://github.com/user-attachments/assets/272786b2-9161-4462-a97d-41e15608c61d" />
+![Job Search Architecture Diagram](docs/JOB%20SEARCH%20ARCHITECTURE%20DIAGRAM.png)
 
 
 ### Architecture Description
