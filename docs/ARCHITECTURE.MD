@@ -1,7 +1,7 @@
 ## Architecture
 
 ### Architecture Diagram
-![Job Search Architecture Diagram](docs/JOB%20SEARCH%20ARCHITECTURE%20DIAGRAM.png)
+![Job Search Architecture Diagram](JOB%20SEARCH%20ARCHITECTURE%20DIAGRAM.png)
 
 
 ### Architecture Description
