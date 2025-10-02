@@ -1,23 +1,26 @@
-# ASU Agentic Job Search - System Architecture & User Flow
+# User Flow & Journey
 
 ## Overview
 
-This documentation describes the AI-powered career services system architecture, featuring a multi-agent system with intelligent job matching and personalized career guidance through a conversational interface.
+This documentation describes the user journey through the AI-powered job search assistant, from initial profile setup through conversational job discovery and automated daily recommendations.
+
+### Visual Flow Diagram
+![User Flow Diagram](user_flow.png)
 
 ## Application Routes & User Journey
 
 ### Route Structure
-The React application uses client-side routing with AWS Amplify handling SPA redirects:
+The React application uses client-side routing with three main user interfaces:
 
 - **`/` (ProfilePage)**: Initial profile setup and resume upload
-- **`/job-options` (JobOptionsPage)**: Job search category selection  
+- **`/job-options` (JobOptionsPage)**: Job search category selection
 - **`/chatbot` (ChatBotPage)**: AI-powered conversational interface
 
 ### User Experience Flow
 
 #### 1. Profile Setup (`/`)
 **Initial onboarding and profile creation**
-- **Resume Upload**: Optional AI-powered resume parsing using AWS Bedrock
+- **Resume Upload**: Optional AI-powered resume parsing using AWS Bedrock Nova Pro
 - **Profile Form**: Personal information, education, experience, job preferences
 - **Notification Settings**: Opt-in for daily job alerts via email/SMS
 - **Data Storage**: Profile saved to DynamoDB with email as primary key
@@ -26,195 +29,100 @@ The React application uses client-side routing with AWS Amplify handling SPA red
 #### 2. Job Search Options (`/job-options`)
 **Category selection for targeted job search**
 - **Part-time Jobs**: Student-friendly flexible positions
-- **Full-time & Internships**: Career-focused opportunities  
+- **Full-time & Internships**: Career-focused opportunities
 - **Career Exploration**: Guidance on career paths and majors
-- **Context Passing**: User name and preferences carried to chat interface
+- **Context Passing**: User preferences carried to chat interface
 - **Navigation**: All options lead to the chatbot with appropriate context
 
 #### 3. AI Chat Interface (`/chatbot`)
 **Conversational job search and career guidance**
-- **Multi-Agent System**: Orchestrator routes queries to specialized agents
-- **Job Search**: Natural language job discovery with personalized results
+- **Multi-Agent System**: Intelligent routing between job search and career advice
+- **Natural Language Queries**: Ask questions like "Find software engineering internships" or "How do I prepare for coding interviews?"
+- **Personalized Results**: Job recommendations based on profile, preferences, and conversation history
+- **Interactive Job Cards**: Clickable job results with detailed descriptions and fit analysis
 - **Career Advice**: Professional development guidance with source citations
-- **Interactive Results**: Job popup modals with detailed fit analysis
-- **Memory Integration**: Conversation history and user preferences
-- **Profile Access**: Return to profile page for updates
+- **Memory Integration**: Conversation continuity across sessions
+- **Profile Access**: Easy navigation back to update profile information
 
-## Multi-Agent AI Architecture
+## AI Agent System (User Perspective)
 
-### Agent System Design
-The system implements the "Agents as Tools" pattern with three specialized agents:
+### How the AI Agents Work for Users
 
 #### Orchestrator Agent
-- **Intent Recognition**: Analyzes user queries to determine appropriate routing
-- **Context Management**: Integrates conversation history and user preferences
-- **Query Enhancement**: Enriches queries with profile data and session context
-- **Response Coordination**: Manages interactions between specialized agents
-- **Memory Integration**: Bedrock AgentCore for conversation continuity
+- **Smart Routing**: Automatically understands if you're asking about jobs or career advice
+- **Context Awareness**: Remembers your profile details and previous conversations
+- **Personalization**: Tailors responses based on your career level and interests
 
 #### Job Search Agent
-- **Live Search Mode**: Interactive job discovery with immediate JSON results
-- **Batch Processing Mode**: Automated daily job matching for notifications
-- **Knowledge Base Integration**: Searches job listings using semantic similarity
-- **Personalization**: Uses profile data, conversation history, and stated preferences
-- **Fit Analysis**: Comprehensive matching based on skills, experience, and career goals
-- **Performance Optimization**: Limited to 5 knowledge base queries per search
+- **Intelligent Matching**: Finds jobs that match your skills, experience, and preferences
+- **Real-time Search**: Immediate results as you chat
+- **Fit Analysis**: Explains why each job might be a good match for you
+- **Diverse Opportunities**: Searches across different job types and locations
 
 #### Career Advice Agent
-- **Professional Guidance**: Career development tips and best practices
-- **Resource Integration**: Searches career resources knowledge base
-- **Source Citations**: Provides URLs and references for advice
-- **Memory-Aware**: Builds on previous career advice sessions
-- **Personalized Recommendations**: Tailored to user's career trajectory and goals
+- **Expert Guidance**: Provides career development tips and industry insights
+- **Source Citations**: Links to helpful articles and resources
+- **Personalized Advice**: Tailored recommendations based on your career goals
+- **Long-term Memory**: Builds on previous career conversations
 
-### Memory & Personalization System
+### Memory & Personalization Features
 
-#### Bedrock AgentCore Integration
-- **Actor-Based Memory**: Email-based user identification for long-term memory
-- **Session Continuity**: Session ID tracking for conversation context
-- **Preference Storage**: User preferences and job search history
-- **Conversation History**: Multi-turn context preservation across sessions
+#### Conversation Continuity
+- **Session Memory**: Remembers your conversation within each chat session
+- **Long-term Memory**: Remembers your preferences and past interactions across sessions
+- **Profile Integration**: Uses your resume data and stated preferences for better recommendations
 
-#### Profile Integration
-- **Resume Analysis**: AI extraction of skills, experience, and education
-- **Preference Tracking**: Job role preferences, location, notification settings
-- **Context Enrichment**: Combines profile data with conversation context
-- **Continuous Learning**: Improves recommendations based on user interactions
+#### Automated Daily Job Matching
+- **Background Processing**: Daily job searches run automatically while you sleep
+- **Personalized Alerts**: Email notifications with jobs matching your criteria
+- **Smart Filtering**: Avoids sending duplicate or irrelevant recommendations
 
-## Daily Job Processing System
+## User Benefits & Features
 
-### Automated Workflow Architecture
+### For Students
+- **Easy Job Discovery**: Natural language search instead of complex filters
+- **Career Guidance**: Access to professional advice and resources
+- **Skill Development**: Resume analysis and improvement suggestions
+- **Time Saving**: Automated daily job matching reduces manual searching
 
-#### 1. EventBridge Scheduling
-- **Daily Trigger**: 1 AM MST (8 AM UTC) for job processing
-- **Notification Trigger**: 9 AM MST (4 PM UTC) for email/SMS delivery
-- **Batch Processing**: Scans all users with notification opt-in enabled
+### For Job Seekers
+- **Personalized Results**: Recommendations based on your unique profile
+- **Comprehensive Coverage**: Jobs, internships, and career advice in one place
+- **Professional Support**: AI-powered guidance for career development
+- **Flexible Communication**: Chat anytime, receive daily email summaries
 
-#### 2. SQS Message Processing
-- **Queue Distribution**: Individual job search tasks per user
-- **Message Format**: User profile data, email, session ID, and processing type
-- **Parallel Processing**: Multiple Lambda instances handle concurrent requests
-- **Error Handling**: Failed messages don't affect other user processing
+## User Flow Diagram
 
-#### 3. AgentCore Batch Processing
-- **Enhanced Prompts**: Comprehensive user profile data for personalized matching
-- **Batch Mode**: Specialized agent behavior for automated processing
-- **Database Storage**: Job recommendations saved to DynamoDB
-- **Performance Optimization**: Efficient knowledge base usage for scalability
+The application follows this high-level user journey:
 
-#### 4. Notification Delivery
-- **Email Integration**: Amazon SES for personalized job alert emails
-- **SMS Integration**: Amazon SNS for optional text message notifications
-- **Preference Respect**: Only sends to users with active opt-in status
-- **Content Personalization**: Tailored job summaries based on user preferences
-
-## Data Architecture & Storage
-
-### DynamoDB Tables
-
-#### Student Profile Table
-- **Partition Key**: `actionID` (email-based identifier)
-- **Data**: Personal info, education, experience, preferences, notification settings
-- **Usage**: Profile management, agent personalization, batch processing
-
-#### Job Recommendations Table  
-- **Partition Key**: `userJobKey` (email#job_type composite)
-- **Sort Key**: `createdAt` (timestamp for chronological ordering)
-- **Data**: Job details, fit analysis, recommendation metadata
-- **Usage**: Daily job storage, notification content, user job history
-
-### S3 Storage
-
-#### Resume Bucket
-- **Purpose**: Uploaded resume document storage
-- **Processing**: Lambda-based AI parsing using AWS Bedrock
-- **Security**: Encrypted storage with CORS configuration
-- **Integration**: Direct frontend upload with presigned URLs
-
-#### Jobs Bucket
-- **Purpose**: Job listing data source for knowledge base
-- **Integration**: Bedrock knowledge base with S3 data source
-- **Processing**: Daily updates with new job postings
-- **Search**: Semantic similarity using Titan embeddings
-
-### Knowledge Base Architecture
-
-#### Job Search Knowledge Base
-- **Embedding Model**: Amazon Titan Embed Text v2
-- **Data Source**: S3 bucket with job listings
-- **Context Enrichment**: Anthropic Claude Haiku for enhanced context
-- **Search Optimization**: Semantic similarity matching for relevant results
-
-#### Career Resources Knowledge Base
-- **Purpose**: Professional development resources and guidance
-- **Integration**: Career advice agent tool integration
-- **Content**: Industry best practices, career development resources
-- **Source Citations**: URL extraction and reference provision
-
-## AWS Infrastructure Components
-
-### Lambda Functions
-
-#### Frontend Integration
-- **Save Profile**: Direct function URL for profile data persistence
-- **Resume Parser**: AI-powered resume analysis and profile extraction
-- **CORS Configuration**: Secure frontend access with appropriate headers
-
-#### Backend Processing
-- **Batch Processor**: Daily user scanning and SQS message generation
-- **SQS Processor**: Individual job search processing using AgentCore
-- **Notification Sender**: Email/SMS delivery with personalization
-
-#### Agent System
-- **Job Search Agent**: Containerized multi-agent system deployment
-- **Docker Integration**: ECR-based container deployment for complex dependencies
-- **Environment Configuration**: Knowledge base IDs, table names, service ARNs
-
-### AWS Amplify Deployment
-
-#### Frontend Hosting
-- **GitHub Integration**: Automatic deployment from repository changes with secure token management
-- **Security**: GitHub Personal Access Token stored in AWS Secrets Manager with proper IAM permissions
-- **Build Configuration**: React build process with frontend-specific settings
-- **Custom Rules**: SPA routing support for React Router DOM
-  - Regex catch-all pattern for routes without file extensions → `/index.html`
-  - Explicit `/job-options` → `/index.html` (rewrite for SPA routing)
-  - Explicit `/chatbot` → `/index.html` (rewrite for SPA routing)
-- **Environment Variables**: AWS service endpoints and configuration
-
-#### CI/CD Pipeline
-- **Automatic Builds**: Triggered by GitHub repository changes and CDK deployments
-- **Custom Resource Integration**: AWS Custom Resource triggers builds on stack creation/updates
-- **Secure Authentication**: Amplify app granted read access to GitHub token secret
-- **Build Optimization**: Node.js dependency caching for faster builds
-- **Production Deployment**: Optimized React build with asset optimization
-- **Route Configuration**: Proper SPA routing support for all application routes
-
-## Security & Best Practices
-
-### Data Protection
-- **Encryption**: All S3 buckets and DynamoDB tables encrypted at rest
-- **HTTPS Only**: All communication secured with TLS
-- **Access Control**: IAM roles with least privilege principles
-- **Secret Management**: GitHub tokens stored securely in AWS Secrets Manager
-- **Secure CI/CD**: Amplify app granted proper read permissions to access GitHub credentials
-- **CORS Configuration**: Secure frontend-backend communication
-
-### Performance Optimization
-- **Knowledge Base Limits**: Maximum 5 queries per job search for efficiency
-- **Streaming Responses**: Real-time user interaction with progressive loading
-- **Batch Processing**: Scalable daily job matching without user impact
-- **Memory Management**: Efficient conversation context handling
-
-### Monitoring & Observability
-- **CloudWatch Logs**: Comprehensive logging across all Lambda functions
-- **Error Tracking**: Detailed error handling and alerting
-- **Performance Metrics**: SQS processing times and success rates
-- **User Analytics**: Job search patterns and recommendation effectiveness
+```
+User Visits App
+    ↓
+Profile Setup (/profile)
+├── Resume Upload (Optional)
+├── Personal Information
+└── Job Preferences
+    ↓
+Job Category Selection (/job-options)
+├── Part-time Jobs
+├── Full-time & Internships
+└── Career Exploration
+    ↓
+AI Chat Interface (/chatbot)
+├── Natural Language Queries
+├── Personalized Job Results
+├── Career Advice & Guidance
+└── Interactive Job Details
+    ↓
+Automated Daily Processing
+├── Background Job Matching
+├── Email Notifications
+└── SMS Alerts (Optional)
+```
 
 ## Files
-- `user_flow.dot` - Graphviz source file
-- `user_flow.png` - Generated flow diagram image
+- `user_flow.dot` - Graphviz source file for the flow diagram
+- `user_flow.png` - Generated PNG image of the user flow diagram
 
 ## Generate Image
 ```bash
