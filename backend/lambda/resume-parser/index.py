@@ -41,7 +41,7 @@ Return a JSON object with these exact fields. If any field cannot be found in th
   "education": "Education details (100-200 chars) or N/A",
   "experience": "Work experience details (as-is with the description, do not summarize) or N/A",
   "email": "Email address or N/A",
-  "phone": "Phone number or N/A",
+  "phone": "Phone number in +1XXXXXXXXXX format (10 digits after +1) or N/A",
   "preferredJobRole": "Preferred job role titles (Create this field based on the resume, max 3 roles) or N/A",
   "linkedin": "LinkedIn profile URL or N/A"
 }
