@@ -203,6 +203,10 @@ This architecture ensures **high availability**, **scalability**, and **intellig
    - Ensure permissions to create and manage AWS resources like S3, Lambda, Bedrock, DynamoDB, Amplify, SQS, SNS, SES, EventBridge, etc.
    - [AWS IAM Policies and Permissions](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html)
 
+- SMS Messaging Setup (Optional)
+   - For SMS notifications to work, you'll need to set up a 10DLC phone number
+   - See [SMS Prerequisites Guide](docs/SMS_PREREQUISITES.md) for detailed setup instructions
+
 ## Deployment Using AWS CodeBuild and AWS Cloudshell
 ### Prerequisites
 
