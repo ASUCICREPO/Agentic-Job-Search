@@ -194,7 +194,7 @@ def _get_memory_tools(session_id: str = "", email: str = ""):
 
 def _get_session_history(session_id: str = "", email: str = "", max_turns: int = 5):
     """
-    Retrieve short-term memory (conversation history) for the current session.
+    Retrieve short-term memory (conversation history) formatted as Strands Agent messages.
     
     Args:
         session_id: Session identifier
@@ -202,7 +202,7 @@ def _get_session_history(session_id: str = "", email: str = "", max_turns: int =
         max_turns: Maximum number of recent conversation turns to retrieve
     
     Returns:
-        Formatted conversation history string or empty string if none found
+        List of message dictionaries in Strands format or empty list if none found
     """
     
     # Create sanitized actor_id
@@ -211,7 +211,7 @@ def _get_session_history(session_id: str = "", email: str = "", max_turns: int =
     elif session_id:
         actor_id = f"user_{session_id}"
     else:
-        return ""
+        return []
     
     try:
         memory_client = MemoryClient(region_name=AWS_REGION)
@@ -224,22 +224,24 @@ def _get_session_history(session_id: str = "", email: str = "", max_turns: int =
         )
         
         if recent_turns:
-            # Format conversation history for context
-            context_messages = []
+            # Convert to Strands message format
+            messages = []
             for turn in recent_turns:
                 for message in turn:
                     role = message['role'].lower()
                     content = message['content']['text']
-                    context_messages.append(f"{role.title()}: {content}")
-            context_messages = "\n".join(context_messages)
-            print(f"Context messages: {context_messages}")
-            return context_messages
+                    messages.append({
+                        "role": role,
+                        "content": [{"text": content}]
+                    })
+            print(f"Loaded {len(messages)} messages from conversation history")
+            return messages
         else:
-            return ""
+            return []
         
     except Exception as e:
         print(f"Failed to retrieve session history: {e}")
-        return ""
+        return []
 
 
 def _create_memory_event(role: str, content: str, session_id: str = "", email: str = ""):
@@ -421,9 +423,15 @@ class MultiAgentJobSearchSystem:
         # Combine all available tools
         tools = [job_search_agent_tool, career_advice_agent_tool, get_student_profile] + memory_tools
 
+        # Get conversation history for livesearch
+        conversation_messages = []
+        if source == "livesearch":
+            conversation_messages = _get_session_history(session_id, email)
+
         self.orchestrator_agent = Agent(
             tools=tools,
             model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            messages=conversation_messages,
             system_prompt=(
                 "You are an Orchestrator Agent for a Career Services platform with full memory access.\n\n"
                 "Available Agents:\n"
@@ -538,13 +546,6 @@ async def handle_agent_request(payload):
         context_parts.append(f"Source: {source}")
 
         enhanced_prompt = f"Current User Query: {prompt}\n[Context: {' | '.join(context_parts)}]"
-
-        # For livesearch, add conversation history to orchestrator system prompt
-        if source == "livesearch":
-            conversation_history = _get_session_history(session_id, email)
-            if conversation_history:
-                # Add conversation history to orchestrator's system prompt
-                enhanced_prompt += f"\n\nRecent conversation history:\n{conversation_history}"
 
         # Check if source is "batch" - if so, directly call job_search_agent_tool
         if source == "batch":
