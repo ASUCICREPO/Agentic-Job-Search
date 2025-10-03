@@ -402,29 +402,29 @@ const ChatBotPage: React.FC = () => {
                         streamingTimeout = null;
                     }
 
-                    // Store the career advice and check if we have sources ready
+                    // Create streaming message if it doesn't exist yet
+                    if (streamingMessageId === null) {
+                        streamingMessageId = Date.now() + Math.random();
+                    }
+
+                    // Always update the message with career advice immediately
+                    // Sources will be added later if they arrive
+                    updateMessageWithCareerAdviceAndSources(advice, currentSources, streamingMessageId, setMessages);
+                    
+                    // Store the career advice in case sources arrive later
                     localPendingCareerAdvice = advice;
                     setPendingCareerAdvice(advice);
-
-                    // If we already have sources, update the message now
-                    if (currentSources.length > 0) {
-                        updateMessageWithCareerAdviceAndSources(advice, currentSources, streamingMessageId, setMessages);
-                        setCurrentSources([]); // Clear sources for next request
-                        setPendingCareerAdvice(null); // Clear React state
-                        localPendingCareerAdvice = null; // Clear local variable
-                    }
-                    // If no sources yet, wait for onSources callback
                 },
 
                 onSources: (sources: Array<{url: string, score: number}>) => {
-                    setCurrentSources(sources);
-
-                    // If we have pending career advice, update the message now
+                    // If we have pending career advice, update the message with sources
                     if (localPendingCareerAdvice) {
                         updateMessageWithCareerAdviceAndSources(localPendingCareerAdvice, sources, streamingMessageId, setMessages);
-                        setCurrentSources([]); // Clear sources for next request
                         setPendingCareerAdvice(null); // Clear React state
                         localPendingCareerAdvice = null; // Clear local variable
+                    } else {
+                        // Store sources for later use (e.g., for job results)
+                        setCurrentSources(sources);
                     }
                 },
 
