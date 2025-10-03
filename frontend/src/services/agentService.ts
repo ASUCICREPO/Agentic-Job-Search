@@ -130,6 +130,7 @@ export async function invokeAgent(
         // Process the streaming response incrementally
         let buffer = '';
         let hasReceivedStreamingResponse = false;
+        let careerAdviceReceived = false;
 
         // Use the streaming response body
         const stream = response.response.transformToWebStream();
@@ -195,6 +196,7 @@ export async function invokeAgent(
                   // Handle career advice results
                   if (data.carrier_advice_result && callbacks?.onCareerAdvice) {
                     hasReceivedStreamingResponse = true;
+                    careerAdviceReceived = true;
                     callbacks.onCareerAdvice(data.carrier_advice_result);
                   }
 
@@ -203,14 +205,14 @@ export async function invokeAgent(
                     callbacks.onSources(data.sources);
                   }
 
-                  // Handle regular response
-                  if (data.response && callbacks?.onResponse) {
+                  // Handle regular response (but not if career advice was already received)
+                  if (data.response && callbacks?.onResponse && !careerAdviceReceived) {
                     hasReceivedStreamingResponse = true;
                     callbacks.onResponse(data.response);
                   }
 
-                  // Handle final result (only if no streaming response was received)
-                  if (data.final_result && !hasReceivedStreamingResponse && callbacks?.onResponse) {
+                  // Handle final result (only if no streaming response was received and no career advice)
+                  if (data.final_result && !hasReceivedStreamingResponse && !careerAdviceReceived && callbacks?.onResponse) {
                     callbacks.onResponse(data.final_result);
                   }
 
