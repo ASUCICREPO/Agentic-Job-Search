@@ -48,8 +48,10 @@ export const getJobRecommendations = async (
   try {
     requireApiUrl();
 
-    // Don't encode - API Gateway handles path parameters directly
-    const url = `${JOB_RECOMMENDATIONS_API_URL}/job-recommendations/${userJobKey}/${createdAt}`;
+    // Encode URL parameters to handle special characters like # in userJobKey
+    const encodedUserJobKey = encodeURIComponent(userJobKey);
+    const encodedCreatedAt = encodeURIComponent(createdAt);
+    const url = `${JOB_RECOMMENDATIONS_API_URL}/job-recommendations/${encodedUserJobKey}/${encodedCreatedAt}`;
 
     console.log('Fetching job recommendations from:', url);
 
