@@ -10,7 +10,8 @@ set -euo pipefail
 
 # Prompt for AWS region if not set
 if [ -z "${AWS_REGION:-}" ]; then
-  read -rp "Enter AWS region (e.g., us-east-1): " AWS_REGION
+  read -rp "Enter AWS region (default: us-west-2): " AWS_REGION
+  AWS_REGION=${AWS_REGION:-us-west-2}
 fi
 
 # Prompt for ECR repository name
