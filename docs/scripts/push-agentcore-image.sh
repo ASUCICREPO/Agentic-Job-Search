@@ -85,7 +85,7 @@ echo "Building Docker image..."
 echo "Platform: $PLATFORM"
 echo "Image URI: $ECR_URI"
 
-cd backend/JobSearchAgent
+cd "$(dirname "$0")/../../backend/JobSearchAgent"
 
 docker build --platform "$PLATFORM" -t "$ECR_URI" .
 
