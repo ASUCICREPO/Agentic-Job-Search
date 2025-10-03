@@ -10,6 +10,16 @@ const JobGridContainer = styled.div`
   gap: 8px;
   width: 100%;
   margin-top: 12px;
+
+  @media (max-width: 480px) {
+    padding: 0;
+    gap: 12px;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    width: 100vw;
+    position: relative;
+    left: 50%;
+  }
 `;
 
 const JobCard = styled.div`
@@ -22,9 +32,18 @@ const JobCard = styled.div`
   transition: box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  @media (max-width: 480px) {
+    padding: 16px 12px;
+    gap: 8px;
+    border-left-width: 4px;
+    margin: 0;
+    border-radius: 0;
   }
 `;
 
@@ -38,7 +57,11 @@ const JobHeader = styled.div`
 
   @media (max-width: 600px) {
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
+  }
+
+  @media (max-width: 480px) {
+    margin-bottom: 12px;
   }
 `;
 
@@ -50,12 +73,14 @@ const JobInfo = styled.div`
 const JobTitle = styled.h3`
   color: #333;
   font-size: 1.1rem;
-  margin: 0 0 1px 0;
+  margin: 0 0 4px 0;
   font-weight: 600;
   word-wrap: break-word;
+  line-height: 1.3;
 
   @media (max-width: 480px) {
-    font-size: 1rem;
+    font-size: 1.05rem;
+    margin: 0 0 6px 0;
   }
 `;
 
@@ -64,6 +89,11 @@ const Company = styled.p`
   margin: 0 0 4px 0;
   font-size: 0.85rem;
   word-wrap: break-word;
+
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
+    margin: 0 0 8px 0;
+  }
 `;
 
 const NotificationToggleContainer = styled.div`
@@ -143,7 +173,12 @@ const JobChipsContainer = styled.div`
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
-  margin: 4px 0;
+  margin: 8px 0;
+
+  @media (max-width: 480px) {
+    margin: 10px 0;
+    gap: 6px;
+  }
 `;
 
 const JobChip = styled.span`
@@ -159,20 +194,26 @@ const JobChip = styled.span`
   align-self: flex-start;
 
   @media (max-width: 480px) {
-    font-size: 0.7rem;
-    padding: 3px 10px;
+    font-size: 0.72rem;
+    padding: 4px 10px;
   }
 `;
 
 const JobDescription = styled.p`
   color: #555;
-  line-height: 1.4;
-  margin: 4px 0;
+  line-height: 1.5;
+  margin: 8px 0;
   font-size: 0.9rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+
+  @media (max-width: 480px) {
+    margin: 10px 0;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
 `;
 
 const RequirementsContent = styled.div`
