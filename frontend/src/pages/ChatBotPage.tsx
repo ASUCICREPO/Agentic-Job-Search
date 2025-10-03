@@ -155,6 +155,7 @@ const ChatBotPage: React.FC = () => {
     const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set());
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [pendingCareerAdvice, setPendingCareerAdvice] = useState<string | null>(null);
+    const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
     const chatAreaRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -181,6 +182,7 @@ const ChatBotPage: React.FC = () => {
             const params = parseSmsLinkParams();
 
             if (params && params.userJobKey && params.createdAt) {
+                setIsLoadingRecommendations(true);
                 try {
                     console.log('Loading job recommendations from SMS link:', params);
                     const recommendations = await getJobRecommendations(params.userJobKey, params.createdAt);
@@ -246,6 +248,8 @@ const ChatBotPage: React.FC = () => {
                         timestamp: new Date()
                     };
                     setMessages([errorMessage]);
+                } finally {
+                    setIsLoadingRecommendations(false);
                 }
             }
         };
@@ -552,7 +556,33 @@ const ChatBotPage: React.FC = () => {
                 </ProfileButton>
             </Header>
 
-            <ChatArea ref={chatAreaRef}>
+            {isLoadingRecommendations ? (
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 'calc(100vh - 200px)',
+                    gap: '20px'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        gap: '10px'
+                    }}>
+                        <TypingDot />
+                        <TypingDot />
+                        <TypingDot />
+                    </div>
+                    <div style={{
+                        fontSize: '1.2em',
+                        color: '#8C1D40',
+                        fontWeight: 500
+                    }}>
+                        Loading your job recommendations...
+                    </div>
+                </div>
+            ) : (
+                <ChatArea ref={chatAreaRef}>
                 {messages.map((message, index) => {
 
                     return (
@@ -678,6 +708,7 @@ const ChatBotPage: React.FC = () => {
                 
 
             </ChatArea>
+            )}
 
             <InputContainer>
                 <InputWrapper>
