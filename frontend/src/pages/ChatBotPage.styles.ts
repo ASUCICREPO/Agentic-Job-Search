@@ -90,6 +90,11 @@ export const ChatArea = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
+
+  @media (max-width: 480px) {
+    padding: 12px 0;
+    gap: 16px;
+  }
 `;
 
 export const MessageContainer = styled.div<{ $isUser: boolean }>`
@@ -104,11 +109,18 @@ export const BotMessageWrapper = styled.div`
   align-items: flex-start;
   gap: 10px;
   max-width: 65%;
+
+  @media (max-width: 480px) {
+    max-width: 100%;
+    width: 100%;
+    gap: 8px;
+  }
 `;
 
 export const BotContentWrapper = styled.div`
   display: flex;
   flex-direction: column;
+  width: 100%;
 `;
 
 export const BotMessageBubble = styled.div`
@@ -119,6 +131,12 @@ export const BotMessageBubble = styled.div`
   font-size: 0.95rem;
   line-height: 1.4;
   position: relative;
+
+  @media (max-width: 480px) {
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    margin: 0 12px;
+  }
 `;
 
 export const UserMessageWrapper = styled.div`
