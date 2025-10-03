@@ -33,10 +33,17 @@ const JobHeader = styled.div`
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+    gap: 8px;
+  }
 `;
 
 const JobInfo = styled.div`
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
 `;
 
@@ -45,12 +52,18 @@ const JobTitle = styled.h3`
   font-size: 1.1rem;
   margin: 0 0 1px 0;
   font-weight: 600;
+  word-wrap: break-word;
+
+  @media (max-width: 480px) {
+    font-size: 1rem;
+  }
 `;
 
 const Company = styled.p`
   color: #666;
   margin: 0 0 4px 0;
   font-size: 0.85rem;
+  word-wrap: break-word;
 `;
 
 const NotificationToggleContainer = styled.div`
@@ -58,6 +71,11 @@ const NotificationToggleContainer = styled.div`
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+
+  @media (max-width: 600px) {
+    width: 100%;
+    justify-content: flex-start;
+  }
 `;
 
 const ToggleLabel = styled.label<{ $isAutoChecked?: boolean }>`
@@ -69,6 +87,7 @@ const ToggleLabel = styled.label<{ $isAutoChecked?: boolean }>`
   color: ${props => props.$isAutoChecked ? '#8B1538' : '#333'};
   font-weight: 500;
   position: relative;
+  max-width: 100%;
 
   &::before {
     content: ${props => props.$isAutoChecked ? '"(Matches your preferred role)"' : '""'};
@@ -76,13 +95,17 @@ const ToggleLabel = styled.label<{ $isAutoChecked?: boolean }>`
     color: #8B1538;
     font-weight: 400;
     margin-bottom: 2px;
-    white-space: nowrap;
+    white-space: normal;
+    word-wrap: break-word;
   }
 
   span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    word-wrap: break-word;
+    
+    @media (max-width: 480px) {
+      font-size: 0.75rem;
+    }
   }
 `;
 
@@ -120,6 +143,7 @@ const JobChipsContainer = styled.div`
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+  margin: 4px 0;
 `;
 
 const JobChip = styled.span`
@@ -133,6 +157,11 @@ const JobChip = styled.span`
   white-space: nowrap;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   align-self: flex-start;
+
+  @media (max-width: 480px) {
+    font-size: 0.7rem;
+    padding: 3px 10px;
+  }
 `;
 
 const JobDescription = styled.p`
@@ -185,6 +214,11 @@ const WhyThisMatchesContainer = styled.div`
     border-radius: 12px;
     z-index: -1;
   }
+
+  @media (max-width: 480px) {
+    padding: 15px;
+    border-radius: 10px;
+  }
 `;
 
 const WhyThisMatchesTitle = styled.h4`
@@ -192,6 +226,11 @@ const WhyThisMatchesTitle = styled.h4`
   font-size: 16px;
   font-weight: 700;
   color: #8B1538;
+
+  @media (max-width: 480px) {
+    font-size: 14px;
+    margin: 0 0 8px 0;
+  }
 `;
 
 const WhyThisMatchesText = styled.p`
@@ -200,6 +239,11 @@ const WhyThisMatchesText = styled.p`
   color: #000000;
   line-height: 1.5;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+
+  @media (max-width: 480px) {
+    font-size: 13px;
+    line-height: 1.4;
+  }
 `;
 
 const ButtonContainer = styled.div`
@@ -247,6 +291,16 @@ const ApplyButton = styled.button`
   &:active {
     transform: translateY(0);
     box-shadow: 0 2px 4px rgba(139, 21, 56, 0.2);
+  }
+
+  @media (max-width: 600px) {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 0.85rem;
+    padding: 10px 20px;
   }
 `;
 
