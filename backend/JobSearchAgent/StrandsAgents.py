@@ -361,7 +361,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
                 f"Available Tools:\n"
-                f"• retrieve: Access career resources using knowledgeBaseId: '{CARRIER_RESOURCE_KB}. Maximum 2-3 retrieve'\n"
+                f"• retrieve: Access career resources using knowledgeBaseId: '{CARRIER_RESOURCE_KB}'. Maximum 2-3 retrieve\n"
                 "• Memory tools: Access conversation history, previous advice sessions, and stored preferences\n"
                 "• get_student_profile: Check user profile\n"
                 "MEMORY-AWARE CAREER GUIDANCE WORKFLOW:\n"
