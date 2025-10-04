@@ -18,7 +18,7 @@ import * as ses from "aws-cdk-lib/aws-ses";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as amplify from "@aws-cdk/aws-amplify-alpha";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId,} from "aws-cdk-lib/custom-resources";
+import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId, } from "aws-cdk-lib/custom-resources";
 
 export class jobsearch1 extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -163,6 +163,37 @@ export class jobsearch1 extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.DESTROY, // for production have retain
       }
     );
+
+    // CloudWatch Logs role for API Gateway (required for logging)
+    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs')
+      ]
+    });
+
+    // Set the CloudWatch role for API Gateway account settings
+    new AwsCustomResource(this, 'ApiGatewayAccountConfig', {
+      onCreate: {
+        service: 'APIGateway',
+        action: 'putAccount',
+        parameters: {
+          cloudwatchRoleArn: apiGatewayCloudWatchRole.roleArn
+        },
+        physicalResourceId: PhysicalResourceId.of('api-gateway-account-config')
+      },
+      onUpdate: {
+        service: 'APIGateway',
+        action: 'putAccount',
+        parameters: {
+          cloudwatchRoleArn: apiGatewayCloudWatchRole.roleArn
+        },
+        physicalResourceId: PhysicalResourceId.of('api-gateway-account-config')
+      },
+      policy: AwsCustomResourcePolicy.fromSdkCalls({
+        resources: AwsCustomResourcePolicy.ANY_RESOURCE
+      })
+    });
 
     // API Gateway with direct DynamoDB integration for job recommendations
     const jobRecommendationsApi = new apigateway.RestApi(this, 'JobRecommendationsApi', {
