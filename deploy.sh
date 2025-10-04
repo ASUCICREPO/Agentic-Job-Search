@@ -68,7 +68,7 @@ if [ -z "${SENDER_NUMBER:-}" ]; then
 fi
 
 if [ -z "${ACTION:-}" ]; then
-  read -rp "Would you like to [deploy] or [destroy] the stacks? Type deploy or destroy " ACTION
+  read -rp "Would you like to [deploy] or [destroy] the stacks? Type deploy or destroy: " ACTION
   ACTION=$(printf '%s' "$ACTION" | tr '[:upper:]' '[:lower:]')
 fi
 
