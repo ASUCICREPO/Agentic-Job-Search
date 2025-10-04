@@ -173,7 +173,7 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     // Set the CloudWatch role for API Gateway account settings
-    new AwsCustomResource(this, 'ApiGatewayAccountConfig', {
+    const apiGatewayAccountConfig = new AwsCustomResource(this, 'ApiGatewayAccountConfig', {
       onCreate: {
         service: 'APIGateway',
         action: 'putAccount',
@@ -209,6 +209,9 @@ export class jobsearch1 extends cdk.Stack {
         allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
       },
     });
+
+    // Ensure API Gateway account config is set before deploying the API
+    jobRecommendationsApi.node.addDependency(apiGatewayAccountConfig);
 
     // Create IAM role for API Gateway to access DynamoDB
     const apiGatewayDynamoDBRole = new iam.Role(this, 'ApiGatewayDynamoDBRole', {
