@@ -56,7 +56,7 @@ The script would prompt you for variables needed for deployment.
 ./deploy.sh
 ```
 
-4. **Post-Deployment Setup**: After CodeBuild deployment completes, follow the [Post-Deployment Setup Guide](docs/POST_DEPLOYMENT_SETUP.md) to configure Knowledge Bases, AgentCore Memory, and update environment variables.
+4. **Post-Deployment Setup**: After CodeBuild deployment completes, follow the [Post-Deployment Setup Guide](POST_DEPLOYMENT_SETUP.md) to configure Knowledge Bases, AgentCore Memory, and update environment variables.
 
 ### Manual CDK Deployment
 
@@ -126,4 +126,4 @@ cdk deploy --all \
   -c senderNumber=YOUR_SENDER_PHONE_NUMBER
 ```
 
-6. **Post-Deployment Setup**: After manual deployment completes, follow the [Post-Deployment Setup Guide](docs/POST_DEPLOYMENT_SETUP.md) to configure Knowledge Bases, AgentCore Memory, and update environment variables.
+6. **Post-Deployment Setup**: After manual deployment completes, follow the [Post-Deployment Setup Guide](POST_DEPLOYMENT_SETUP.md) to configure Knowledge Bases, AgentCore Memory, and update environment variables.
