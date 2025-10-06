@@ -12,7 +12,9 @@ This system uses a **Lambda Function URL + Bedrock AgentCore** architecture rath
 
 ## 1) Profile Management (Lambda Function URLs)
 
-**POST** `{LAMBDA_FUNCTION_URL}/profile` — Save or update user profile
+**Note**: Each Lambda function has its own unique Function URL. There are no paths - requests go directly to the root of each Function URL.
+
+**POST** `{LAMBDA_FUNCTION_URL}` — Save or update user profile
 Purpose: Store user profile data including preferences and notification settings
 **CORS**: Enabled for all origins with POST/GET methods
 Request body:
@@ -39,7 +41,7 @@ Request body:
 - `400`: `{"error": "Request body is required"}` or `{"error": "Email is required"}`
 - `500`: `{"error": "Error message", "message": "Failed to process profile request"}`
 
-**GET** `{LAMBDA_FUNCTION_URL}/profile?email={email}` — Retrieve user profile
+**GET** `{LAMBDA_FUNCTION_URL}?email={email}` — Retrieve user profile
 Purpose: Get existing user profile by email
 Query parameters: `email` (required)
 **Response Examples:**
@@ -47,7 +49,7 @@ Query parameters: `email` (required)
 - `404`: `{"message": "Profile not found", "profile": null}`
 - `400`: `{"error": "Email parameter is required for GET request"}`
 
-**POST** `{LAMBDA_FUNCTION_URL}/resume` — Parse resume with AI
+**POST** `{RESUME_LAMBDA_FUNCTION_URL}` — Parse resume with AI
 Purpose: Extract structured data from uploaded resume using AWS Bedrock Nova Pro
 **CORS**: Enabled for all origins with POST method
 Request body:
@@ -134,26 +136,6 @@ All endpoints return standardized HTTP status codes:
 - **404**: Not Found (profile/recommendations not found)
 - **405**: Method Not Allowed (unsupported HTTP method)
 - **500**: Internal Server Error (processing failures)
-
-## Environment Variables
-
-Critical environment variables required for operation:
-- `STUDENT_PROFILE_TABLE_NAME`: DynamoDB table for user profiles
-- `BEDROCK_AGENTCORE_RUNTIME_ARN`: AgentCore runtime identifier
-- `BEDROCK_AGENTCORE_QUALIFIER`: AgentCore deployment qualifier
-- `SQS_QUEUE_URL`: Queue for batch processing
-- `JOB_SEARCH_KB`: Knowledge base ID for job search
-- `CARRIER_RESOURCE_KB`: Knowledge base ID for career resources
-
-## Implementation Notes
-
-1. **No Traditional REST API**: Most endpoints use Lambda Function URLs with unique URLs per function
-2. **AgentCore Integration**: Job search and career advice use AWS Bedrock AgentCore SDK directly
-3. **Asynchronous Processing**: Batch jobs use SQS queuing for scalable processing
-4. **Direct DynamoDB Access**: Job recommendations endpoint uses API Gateway → DynamoDB integration
-5. **Function URLs**: Each Lambda function has its own unique URL (not a shared base URL)
-6. **Profile Merging**: Save profile endpoint merges new data with existing profile data
-7. **Session ID Requirements**: AgentCore requires session IDs to be 33+ characters for proper operation
 
 ## Response Format
 All APIs return JSON responses with detailed job information, AI-generated fit analysis, and comprehensive status information for successful matches and career guidance.
