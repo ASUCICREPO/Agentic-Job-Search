@@ -56,6 +56,12 @@ For detailed post-deployment setup and usage instructions, including configurati
 
 For a detailed overview of the application infrastructure, including component interactions, AWS services, and data flow, see [docs/INFRASTRUCTURE.MD](docs/INFRASTRUCTURE.MD).
 
+## 📚 Documentation
+
+- **[API Documentation](docs/API_DOCUMENTATION.md)** - Comprehensive API reference for all endpoints, request/response formats, and integration patterns
+- **[Post-Deployment Setup Guide](docs/POST_DEPLOYMENT_SETUP.md)** - Configuration steps after infrastructure deployment
+- **[User Flow Documentation](docs/USERFLOW.md)** - Detailed system architecture and user journey documentation
+
 ## License
 
 See LICENSE file for details.
