@@ -115,7 +115,7 @@ AWS Region: [your-deployment-region]
 ## Step 2: Create AgentCore Memory
 
 1. **Navigate to Bedrock AgentCore**:
-   - In the AWS Console, go to "Bedrock"
+   - In the AWS Console, go to "Bedrock AgentCore"
    - On the left sidebar, click on "Memory"
 
 2. **Create Memory**:
