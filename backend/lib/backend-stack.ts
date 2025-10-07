@@ -202,9 +202,17 @@ export class jobsearch1 extends cdk.Stack {
         },
         physicalResourceId: PhysicalResourceId.of('api-gateway-account-config')
       },
-      policy: AwsCustomResourcePolicy.fromSdkCalls({
-        resources: AwsCustomResourcePolicy.ANY_RESOURCE
-      })
+      policy: AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'apigateway:PATCH',
+            'apigateway:GET',
+            'apigateway:UpdateAccount'
+          ],
+          resources: ['*']
+        })
+      ])
     });
 
     // API Gateway with direct DynamoDB integration for job recommendations
