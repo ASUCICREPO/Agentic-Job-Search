@@ -164,64 +164,15 @@ export class jobsearch1 extends cdk.Stack {
       }
     );
 
-    // CloudWatch Logs role for API Gateway (required for logging)
-    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
-      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs')
-      ]
-    });
 
-    // Set the CloudWatch role for API Gateway account settings
-    const apiGatewayAccountConfig = new AwsCustomResource(this, 'ApiGatewayAccountConfig', {
-      onCreate: {
-        service: 'APIGateway',
-        action: 'updateAccount',
-        parameters: {
-          patchOps: [
-            {
-              op: 'replace',
-              path: '/cloudwatchRoleArn',
-              value: apiGatewayCloudWatchRole.roleArn
-            }
-          ]
-        },
-        physicalResourceId: PhysicalResourceId.of('api-gateway-account-config')
-      },
-      onUpdate: {
-        service: 'APIGateway',
-        action: 'updateAccount',
-        parameters: {
-          patchOps: [
-            {
-              op: 'replace',
-              path: '/cloudwatchRoleArn',
-              value: apiGatewayCloudWatchRole.roleArn
-            }
-          ]
-        },
-        physicalResourceId: PhysicalResourceId.of('api-gateway-account-config')
-      },
-      policy: AwsCustomResourcePolicy.fromStatements([
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'apigateway:PATCH',
-            'apigateway:GET',
-            'apigateway:UpdateAccount'
-          ],
-          resources: ['*']
-        })
-      ])
-    });
 
     // API Gateway with direct DynamoDB integration for job recommendations
     const jobRecommendationsApi = new apigateway.RestApi(this, 'JobRecommendationsApi', {
       restApiName: 'job-recommendations-api',
       description: 'Direct API for retrieving job recommendations from SMS links',
       deployOptions: {
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
+        loggingLevel: apigateway.MethodLoggingLevel.OFF, // Disable logging to avoid CloudWatch role requirement
+        dataTraceEnabled: false,
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
@@ -229,9 +180,6 @@ export class jobsearch1 extends cdk.Stack {
         allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
       },
     });
-
-    // Ensure API Gateway account config is set before deploying the API
-    jobRecommendationsApi.node.addDependency(apiGatewayAccountConfig);
 
     // Create IAM role for API Gateway to access DynamoDB
     const apiGatewayDynamoDBRole = new iam.Role(this, 'ApiGatewayDynamoDBRole', {
