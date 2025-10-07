@@ -176,17 +176,29 @@ export class jobsearch1 extends cdk.Stack {
     const apiGatewayAccountConfig = new AwsCustomResource(this, 'ApiGatewayAccountConfig', {
       onCreate: {
         service: 'APIGateway',
-        action: 'putAccount',
+        action: 'updateAccount',
         parameters: {
-          cloudwatchRoleArn: apiGatewayCloudWatchRole.roleArn
+          patchOps: [
+            {
+              op: 'replace',
+              path: '/cloudwatchRoleArn',
+              value: apiGatewayCloudWatchRole.roleArn
+            }
+          ]
         },
         physicalResourceId: PhysicalResourceId.of('api-gateway-account-config')
       },
       onUpdate: {
         service: 'APIGateway',
-        action: 'putAccount',
+        action: 'updateAccount',
         parameters: {
-          cloudwatchRoleArn: apiGatewayCloudWatchRole.roleArn
+          patchOps: [
+            {
+              op: 'replace',
+              path: '/cloudwatchRoleArn',
+              value: apiGatewayCloudWatchRole.roleArn
+            }
+          ]
         },
         physicalResourceId: PhysicalResourceId.of('api-gateway-account-config')
       },
@@ -402,7 +414,7 @@ export class jobsearch1 extends cdk.Stack {
 
     // SQS Queue for job notifications
     const jobNotificationQueue = new sqs.Queue(this, "JobNotificationQueue", {
-      visibilityTimeout: cdk.Duration.minutes(5),
+      visibilityTimeout: cdk.Duration.minutes(16), // Must be greater than Lambda timeout (15 min)
     });
 
     // Batch Processor Lambda
