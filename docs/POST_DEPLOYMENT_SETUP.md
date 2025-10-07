@@ -153,7 +153,7 @@ AWS Region: [your-deployment-region]
    - `AGENTCORE_MEMORY_ID` (from Step 2)
    - `AGENTCORE_USER_PREFERENCE_STRATEGY_ID` (from Step 2)
    - `AWS_REGION` (your deployment region)
-   - `CARRIER_RESOURCE_KB` (from deployment output)
+   - `CARRIER_RESOURCE_KB` (navigate to career_resources KB in Amazon Bedrock and get ID from the details section)
    - `JOB_RECOMMENDATIONS_TABLE_NAME` (from deployment output)
    - `JOB_SEARCH_KB` (from deployment output)
    - `STUDENT_PROFILE_TABLE_NAME` (from deployment output)
