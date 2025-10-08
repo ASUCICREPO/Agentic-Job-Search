@@ -12,13 +12,11 @@ This module contains three specialized agents:
 import json
 import os
 from typing import Any, Dict
-import boto3
 from bedrock_agentcore.memory import MemoryClient
 
 from strands import Agent, tool
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from strands.models import BedrockModel
 
 from tools import get_student_profile, sanitize_email_for_actor_id, save_job_recommendations, get_job_recommendations, retrieve
 from tools.retrieve import get_top_sources_for_current_request, clear_current_request_sources
@@ -29,26 +27,6 @@ AGENTCORE_MEMORY_ID = os.getenv('AGENTCORE_MEMORY_ID')
 AGENTCORE_USER_PREFERENCE_STRATEGY_ID = os.getenv('AGENTCORE_USER_PREFERENCE_STRATEGY_ID')
 JOB_SEARCH_KB = os.getenv('JOB_SEARCH_KB') # Job search knowledge base ID - agent should use this for retrieve tool calls
 CARRIER_RESOURCE_KB = os.getenv('CARRIER_RESOURCE_KB')  # Carrier resource knowledge base ID for additional resources
-
-# Cross-account inference credentials (add these to your .env file)
-CROSS_ACCOUNT_ACCESS_KEY_ID = os.getenv('CROSS_ACCOUNT_ACCESS_KEY_ID')
-CROSS_ACCOUNT_SECRET_ACCESS_KEY = os.getenv('CROSS_ACCOUNT_SECRET_ACCESS_KEY')
-CROSS_ACCOUNT_REGION = os.getenv('CROSS_ACCOUNT_REGION', AWS_REGION)
-
-# Create a custom boto3 session for cross-account inference
-session = boto3.Session(
-    aws_access_key_id=CROSS_ACCOUNT_ACCESS_KEY_ID,
-    aws_secret_access_key=CROSS_ACCOUNT_SECRET_ACCESS_KEY,
-    region_name=CROSS_ACCOUNT_REGION
-)
-
-# Create Bedrock model with the custom session
-def create_bedrock_model(model_id: str = "anthropic.claude-sonnet-4.5-20250514-v1:0"):
-    """Create a Bedrock model with cross-account session."""
-    return BedrockModel(
-        model_id=model_id,
-        boto_session=session
-    )
 
 # Fallback handling for missing knowledge bases
 if not CARRIER_RESOURCE_KB:
@@ -335,7 +313,7 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
         # Create a specialized job search agent with updated system prompt
         job_search_agent = Agent(
             tools=tools,
-            model=create_bedrock_model("anthropic.claude-sonnet-4.5-20250514-v1:0"),
+            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=system_prompt
         )
 
@@ -379,7 +357,7 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
         # Create a specialized career advice agent
         career_advice_agent = Agent(
             tools=tools,
-            model=create_bedrock_model("anthropic.claude-sonnet-4.5-20250514-v1:0"),
+            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
                 f"Available Tools:\n"
@@ -453,7 +431,7 @@ class MultiAgentJobSearchSystem:
 
         self.orchestrator_agent = Agent(
             tools=tools,
-            model=create_bedrock_model("anthropic.claude-sonnet-4.5-20250514-v1:0"),
+            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
             messages=conversation_messages,
             system_prompt=(
                 "You are an Orchestrator Agent for a Career Services platform with full memory access.\n\n"
