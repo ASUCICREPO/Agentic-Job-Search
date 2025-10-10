@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { ASULogoImage, UserAvatarImage, BotAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
 import { getJobRecommendations, parseSmsLinkParams } from '../services/jobRecommendationsService';
 import { getProfile } from '../services/profileService';
 import JobGrid from '../components/JobGrid';
+import loadingAnimation from '../assets/loadinganimation.lottie';
 import {
   ChatContainer,
   Header,
@@ -46,6 +48,7 @@ interface Message {
     timestamp: Date;
     jobs?: Job[];
     sources?: Array<{url: string, score: number}>;
+    isStreaming?: boolean;
 }
 
 interface Job {
@@ -156,13 +159,9 @@ const ChatBotPage: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [pendingCareerAdvice, setPendingCareerAdvice] = useState<string | null>(null);
     const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+    const [isLoadingJobs, setIsLoadingJobs] = useState(false); // Track job search loading state
     const chatAreaRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        if (chatAreaRef.current) {
-            chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
-        }
-    }, [messages, isTyping]);
 
     // Handle return from profile page
     useEffect(() => {
@@ -309,6 +308,8 @@ const ChatBotPage: React.FC = () => {
         // Track streaming response accumulation
         let streamingResponse = '';
         let streamingMessageId: number | null = null;
+        let orchestratorMessageId: number | null = null;  // Separate ID for orchestrator thinking
+        let careerAdviceMessageId: number | null = null;  // Separate ID for career advice
         let hasJobResults = false;
         let hasCareerAdvice = false;
         let streamingTimeout: NodeJS.Timeout | null = null;
@@ -317,28 +318,113 @@ const ChatBotPage: React.FC = () => {
         let waitingForCareerAdviceResult = false;
         let waitingForJobResult = false;
         let localPendingCareerAdvice: string | null = null; // Local variable for immediate access
+        let orchestratorThinking = '';  // Accumulate orchestrator thinking
 
         try {
             await invokeAgent(currentInput, {
                 onThinking: (thinking: string) => {
+                    // Show orchestrator thinking in a separate message blob
                     if (!orchestratorStarted) {
                         orchestratorStarted = true;
+                        // Turn off typing indicator once we start streaming actual content
+                        setIsTyping(false);
                     }
-                    // Ignore thinking chunks - only process response chunks
+
+                    // Only accumulate orchestrator thinking if career advice hasn't started
+                    if (!waitingForCareerAdviceResult) {
+                        orchestratorThinking += thinking;
+
+                        if (orchestratorMessageId === null) {
+                            // Create orchestrator thinking message
+                            orchestratorMessageId = Date.now() + Math.random();
+                            const orchestratorMsg: Message = {
+                                id: orchestratorMessageId,
+                                text: orchestratorThinking,
+                                isUser: false,
+                                timestamp: new Date(),
+                                isStreaming: true
+                            };
+                            setMessages(prev => [...prev, orchestratorMsg]);
+                        } else {
+                            // Use requestAnimationFrame for smoother updates
+                            requestAnimationFrame(() => {
+                                setMessages(prev =>
+                                    prev.map(msg =>
+                                        msg.id === orchestratorMessageId
+                                            ? { ...msg, text: orchestratorThinking }
+                                            : msg
+                                    )
+                                );
+                            });
+                        }
+                    }
                 },
 
                 onJobSearchStarted: () => {
                     waitingForJobResult = true;
+                    // Show loading animation on chat body (not in a message)
+                    setIsLoadingJobs(true);
+                    streamingMessageId = orchestratorMessageId; // Job results will update orchestrator message
                 },
 
                 onCareerAdviceStarted: () => {
                     waitingForCareerAdviceResult = true;
+                    
+                    // Create a new typing indicator message for career advice
+                    careerAdviceMessageId = Date.now() + Math.random();
+                    const typingMsg: Message = {
+                        id: careerAdviceMessageId,
+                        text: '',
+                        isUser: false,
+                        timestamp: new Date(),
+                        isStreaming: true
+                    };
+                    setMessages(prev => [...prev, typingMsg]);
+                    
+                    // Mark orchestrator message as complete after 2 seconds
+                    if (orchestratorMessageId !== null) {
+                        setTimeout(() => {
+                            setMessages(prev =>
+                                prev.map(msg =>
+                                    msg.id === orchestratorMessageId
+                                        ? { ...msg, isStreaming: false }
+                                        : msg
+                                )
+                            );
+                        }, 2000);
+                    }
+                },
+
+                onCareerAdviceStreaming: (chunk: string) => {
+                    // Accumulate streaming chunks for career advice in real-time
+                    if (streamingResponse.length > 0) {
+                        streamingResponse += chunk;
+                    } else {
+                        streamingResponse = chunk;
+                    }
+
+                    // Update the existing career advice message blob (created by onCareerAdviceStarted)
+                    if (careerAdviceMessageId !== null) {
+                        // Use requestAnimationFrame for smoother updates
+                        requestAnimationFrame(() => {
+                            setMessages(prev =>
+                                prev.map(msg =>
+                                    msg.id === careerAdviceMessageId
+                                        ? { ...msg, text: streamingResponse }
+                                        : msg
+                                )
+                            );
+                        });
+                    }
                 },
 
                 onJobResults: (jobs: Job[], responseText: string) => {
                     setIsTyping(false);
                     hasJobResults = true;
                     waitingForJobResult = false;
+                    
+                    // Stop loading animation
+                    setIsLoadingJobs(false);
 
                     // Clear any pending streaming timeout
                     if (streamingTimeout) {
@@ -347,14 +433,15 @@ const ChatBotPage: React.FC = () => {
                     }
 
                     if (jobs && jobs.length > 0) {
-                        // Update the existing streaming message with job results, keeping original text
+                        // Update the orchestrator message with job results
                         if (streamingMessageId) {
                             setMessages(prev =>
                                 prev.map(msg =>
                                     msg.id === streamingMessageId
                                         ? {
                                             ...msg,
-                                            jobs: jobs
+                                            jobs: jobs,
+                                            isStreaming: false
                                         }
                                         : msg
                                 )
@@ -363,7 +450,7 @@ const ChatBotPage: React.FC = () => {
                             // Fallback: create new message if no streaming message exists
                             const botMessage: Message = {
                                 id: Date.now() + Math.random(),
-                                text: responseText,
+                                text: responseText || 'Here are your job recommendations:',
                                 isUser: false,
                                 timestamp: new Date(),
                                 jobs: jobs
@@ -373,12 +460,12 @@ const ChatBotPage: React.FC = () => {
                     } else {
                         const errorText = "Sorry, I couldn't find any job opportunities at the moment. Please try again later.";
 
-                        // Update the existing streaming message with error
+                        // Update the orchestrator message with error
                         if (streamingMessageId) {
                             setMessages(prev =>
                                 prev.map(msg =>
                                     msg.id === streamingMessageId
-                                        ? { ...msg, text: errorText }
+                                        ? { ...msg, text: errorText, isStreaming: false }
                                         : msg
                                 )
                             );
@@ -406,30 +493,83 @@ const ChatBotPage: React.FC = () => {
                         streamingTimeout = null;
                     }
 
-                    // Create streaming message if it doesn't exist yet
-                    if (streamingMessageId === null) {
-                        streamingMessageId = Date.now() + Math.random();
-                    }
+                    // If we've been streaming, use the accumulated streamingResponse
+                    // Otherwise use the advice parameter (fallback for non-streaming)
+                    const finalAdvice = streamingResponse.length > 0 ? streamingResponse : advice;
 
-                    // Always update the message with career advice immediately
-                    // Sources will be added later if they arrive
-                    updateMessageWithCareerAdviceAndSources(advice, currentSources, streamingMessageId, setMessages);
+                    // Use the career advice message ID (separate from orchestrator)
+                    if (careerAdviceMessageId === null) {
+                        // Fallback: create new message if streaming didn't create one
+                        careerAdviceMessageId = Date.now() + Math.random();
+                        const careerAdviceMsg: Message = {
+                            id: careerAdviceMessageId,
+                            text: finalAdvice,
+                            isUser: false,
+                            timestamp: new Date(),
+                            isStreaming: false
+                        };
+                        setMessages(prev => [...prev, careerAdviceMsg]);
+                    } else {
+                        // Update the existing career advice message and mark complete
+                        setMessages(prev =>
+                            prev.map(msg =>
+                                msg.id === careerAdviceMessageId
+                                    ? { ...msg, text: finalAdvice, isStreaming: false }
+                                    : msg
+                            )
+                        );
+                    }
                     
                     // Store the career advice in case sources arrive later
-                    localPendingCareerAdvice = advice;
-                    setPendingCareerAdvice(advice);
+                    localPendingCareerAdvice = finalAdvice;
+                    setPendingCareerAdvice(finalAdvice);
                 },
 
                 onSources: (sources: Array<{url: string, score: number}>) => {
-                    // If we have pending career advice, update the message with sources
+                    // If we have pending career advice, update the career advice message with sources
                     if (localPendingCareerAdvice) {
-                        updateMessageWithCareerAdviceAndSources(localPendingCareerAdvice, sources, streamingMessageId, setMessages);
+                        updateMessageWithCareerAdviceAndSources(localPendingCareerAdvice, sources, careerAdviceMessageId, setMessages);
                         setPendingCareerAdvice(null); // Clear React state
                         localPendingCareerAdvice = null; // Clear local variable
                     } else {
                         // Store sources for later use (e.g., for job results)
                         setCurrentSources(sources);
                     }
+                },
+
+                onFinalResult: (result: string) => {
+                    // Final result indicates streaming is complete
+                    // Mark orchestrator message as complete
+                    if (orchestratorMessageId !== null) {
+                        setMessages(prev =>
+                            prev.map(msg =>
+                                msg.id === orchestratorMessageId
+                                    ? { ...msg, isStreaming: false }
+                                    : msg
+                            )
+                        );
+                    }
+                    
+                    // Mark career advice message as complete
+                    if (careerAdviceMessageId !== null) {
+                        setMessages(prev =>
+                            prev.map(msg =>
+                                msg.id === careerAdviceMessageId
+                                    ? { ...msg, isStreaming: false }
+                                    : msg
+                            )
+                        );
+                    }
+                    
+                    // Reset streaming state for next interaction
+                    streamingResponse = "";
+                    streamingMessageId = null;
+                    orchestratorMessageId = null;
+                    careerAdviceMessageId = null;
+                    orchestratorThinking = "";
+                    waitingForResponse = false;
+                    waitingForJobResult = false;
+                    waitingForCareerAdviceResult = false;
                 },
 
                 onResponse: (response: string) => {
@@ -706,6 +846,27 @@ const ChatBotPage: React.FC = () => {
                     </MessageContainer>
                 )}
                 
+                {/* Job search loading animation - displayed on chat body */}
+                {isLoadingJobs && (
+                    <div style={{ 
+                        display: 'flex',
+                        justifyContent: 'flex-start',
+                        paddingLeft: '20px',
+                        marginTop: '-80px',  // Reduce gap from message above
+                        marginBottom: '-10px'  // Reduce gap to content below
+                    }}>
+                        <div style={{ 
+                            width: '250px', 
+                            height: '250px'
+                        }}>
+                            <DotLottieReact
+                                src={loadingAnimation}
+                                loop
+                                autoplay
+                            />
+                        </div>
+                    </div>
+                )}
 
             </ChatArea>
             )}
