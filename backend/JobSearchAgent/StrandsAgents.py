@@ -11,7 +11,8 @@ This module contains three specialized agents:
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, AsyncIterator
+from dataclasses import dataclass
 from bedrock_agentcore.memory import MemoryClient
 
 from strands import Agent, tool
@@ -20,6 +21,12 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 from tools import get_student_profile, sanitize_email_for_actor_id, save_job_recommendations, get_job_recommendations, retrieve
 from tools.retrieve import get_top_sources_for_current_request, clear_current_request_sources
+
+# SubAgentResult for streaming events from career advice agent
+@dataclass
+class SubAgentResult:
+    agent: Agent
+    event: dict
 
 # Environment Variables
 AWS_REGION = os.getenv('AWS_REGION', 'us-west-2')
@@ -90,7 +97,7 @@ def _get_live_job_search_prompt() -> str:
         "• ABSOLUTELY NO additional text, explanations, or introductions before JSON\n"
         "• If no jobs found, return: []\n"
         "• START with [ and END with ]\n"
-        "• fit must provide COMPREHENSIVE analysis of why user matches this job:\n"
+        "• fit must provide analysis of why user matches this job (MAX 50 words):\n"
         "  - Specific skill and experience alignment\n"
         "  - Career growth and development opportunities\n"
         "  - Work environment and role suitability\n"
@@ -335,19 +342,25 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
 
 
 @tool
-def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") -> str:
+async def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") -> AsyncIterator:
     """
     Specialized career advice agent that provides guidance on career development.
+    
+    Uses Strands Sub-Agent Streaming pattern: Yields SubAgentResult events that contain
+    the career advice agent's streaming chunks, which the orchestrator can forward to frontend.
 
     Args:
         query: Career advice question or request for guidance
         email: User email for memory tracking
         session_id: Optional session identifier for conversation continuity
 
-    Returns:
-        Career advice and guidance based on best practices
+    Yields:
+        SubAgentResult events wrapping career advice agent streaming events
+        Final yield: Complete career advice response text
     """
     try:
+        print("[CAREER ADVICE] Starting career advice agent with sub-agent streaming")
+        
         # Get memory tools
         memory_tools = _get_memory_tools(session_id, email)
 
@@ -356,8 +369,10 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
 
         # Create a specialized career advice agent
         career_advice_agent = Agent(
+            name="Career Advice Specialist",
             tools=tools,
             model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            callback_handler=None,  # Suppress sub-agent's own output
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
                 f"Available Tools:\n"
@@ -377,17 +392,15 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 "• Build on previous feedback and recommendations given\n"
                 "• Remember user's progress and achievements from past interactions\n\n"
                 "RESPONSE GUIDELINES:\n"
-                "• CRITICAL: Limit all responses to maximum 200 words\n"
+                "• CRITICAL: Limit all responses to maximum 200-300 words\n"
                 "• Keep answers concise and avoid lengthy explanations unless user requests more details\n"
                 "• Provide actionable, practical advice based on industry best practices\n"
                 "• Cite relevant resources and provide step-by-step guidance when appropriate\n"
                 "• Focus on helping users advance their careers and achieve their professional goals\n"
                 "• Personalize all advice based on user's conversation history and stored preferences\n"
                 "• Return comprehensive, helpful responses that directly address the user's query\n"
-                "• Include specific examples, tips, and actionable steps whenever possible"
-                "URL EXTRACTION:\n"
-                "• Scan ALL retrieve results for URLs (http://, https://, www., .com, .org, .edu)\n"
-                "• If URLs found: Include in new section 'Web Resources:' with only the URLs in format: https://example.com\n"
+                "• Include specific examples, tips, and actionable steps whenever possible\n"
+                "• Always end responses by asking if the user wants more details or has follow-up questions to go over in detail"
             )
             )
 
@@ -401,11 +414,23 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 context_info.append(f"Email: {email}")
             enhanced_query = f"[{' | '.join(context_info)}]\n{enhanced_query}"
 
-        response = career_advice_agent(enhanced_query)
-        return str(response)
+        # Stream from career advice agent and yield SubAgentResult events
+        # The orchestrator will receive these as tool_stream_event
+        result = None
+        async for event in career_advice_agent.stream_async(enhanced_query):
+            # Yield every event wrapped in SubAgentResult
+            yield SubAgentResult(agent=career_advice_agent, event=event)
+            
+            # Capture the final result
+            if "result" in event:
+                result = event["result"]
+        
+        # Final yield: return the complete response
+        yield str(result) if result else "Career advice completed"
 
     except Exception as e:
-        return f"Error in career advice agent: {str(e)}"
+        print(f"[CAREER ADVICE] Error: {e}")
+        yield f"Error in career advice agent: {str(e)}"
 
 
 class MultiAgentJobSearchSystem:
@@ -462,7 +487,6 @@ class MultiAgentJobSearchSystem:
                 "PERSONALIZED JOB SEARCH WORKFLOW - ONLY FOR EXPLICIT JOB SEARCH REQUESTS:\n"
                 "1) Retrieve profile preferences using get_student_profile and memory tools\n"
                 "2) Ask about specific preferences(exact city/location, job type, company size, remote vs onsite modality), ensure profile completeness, confirm with user before proceeding to showcase job results\n"
-                "   - ALWAYS ask these questions after first user interaction: What city/location are you interested in? What type of job role? What size organization (startup, mid-size, large corporation)? Do you prefer remote, onsite, or hybrid work arrangement?\n"
                 "   - For confirming with user: Share what you found via profile and memory tools, mention the specific questions you should ask based on the above point (if any), and ask if they would like to change any preferences before proceeding with job search\n"
                 "3) Enrich job search query with user's profile (skills, experience, locations, salary expectations)\n"
                 "4) Call job_search_agent_tool with enhanced query and source parameter\n\n"
@@ -536,9 +560,6 @@ async def handle_agent_request(payload):
         # Store user message in memory before processing
         if session_id or email:
             _create_memory_event("USER", prompt, session_id, email)
-            # Small delay to ensure memory is stored before retrieval
-            import time
-            time.sleep(0.1)
 
         # Add session and email context if available
         context_parts = []
@@ -580,7 +601,23 @@ async def handle_agent_request(payload):
         try:
             async for event in orchestrator_system.orchestrator_agent.stream_async(enhanced_prompt):
                 try:
-                    # Real-time text generation (thinking process)
+                    # Handle sub-agent streaming events (career advice tool streaming)
+                    tool_stream = event.get("tool_stream_event", {}).get("data")
+                    if isinstance(tool_stream, SubAgentResult):
+                        # Extract the sub-agent's event
+                        sub_event = tool_stream.event
+                        
+                        # Forward data chunks from career advice agent to frontend
+                        if "data" in sub_event:
+                            chunk = sub_event["data"]
+                            # Skip thinking tags
+                            if "<thinking>" not in chunk and "</thinking>" not in chunk:
+                                yield {"carrier_advice_streaming": chunk}
+                        
+                        # Skip other sub-agent events (reasoning, tool calls, etc.)
+                        continue
+                    
+                    # Real-time text generation (thinking process from orchestrator)
                     if "data" in event:
                         yield {"thinking": event["data"]}
 
@@ -616,13 +653,11 @@ async def handle_agent_request(payload):
                         if "name" in tool_info:
                             # Special thinking message for job search agent (send only once)
                             if tool_info["name"] == "job_search_agent_tool" and not job_search_thinking_sent:
-                                yield {"thinking": "🔍 Searching for relevant job opportunities based on your preferences..."}
                                 yield {"job_search_started": True}
                                 job_search_started = True  # Track that job search was initiated
                                 job_search_thinking_sent = True  # Set flag to prevent duplicate messages
                             # Special thinking message for career advice agent (send only once)
                             elif tool_info["name"] == "career_advice_agent_tool" and not carrier_advice_thinking_sent:
-                                yield {"thinking": "💼 Providing career guidance and advice..."}
                                 yield {"carrier_advice_started": True}
                                 carrier_advice_started = True  # Track that career advice was initiated
                                 carrier_advice_thinking_sent = True  # Set flag to prevent duplicate messages
@@ -630,13 +665,7 @@ async def handle_agent_request(payload):
                     # Error events
                     elif "error" in event:
                         yield {"error": event["error"]}
-                    
-                    # Handle any unknown event types gracefully (prevents KeyError crashes)
-                    else:
-                        # Log unknown event types for debugging but don't crash
-                        print(f"[DEBUG] Unknown streaming event received: {list(event.keys())}")
-                        # Don't yield unknown events to prevent frontend issues
-                        
+                                            
                 except Exception as stream_event_error:
                     # Catch any errors in processing individual streaming events
                     print(f"[ERROR] Error processing streaming event: {stream_event_error}")
