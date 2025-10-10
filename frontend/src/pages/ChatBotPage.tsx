@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
-import { ASULogoImage, UserAvatarImage, BotAvatarImage } from '../components/ImageAssets';
+import { ASULogoImage, UserAvatarImage, BotAvatarImage, CarrierAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
 import { getJobRecommendations, parseSmsLinkParams } from '../services/jobRecommendationsService';
 import { getProfile } from '../services/profileService';
@@ -49,6 +49,7 @@ interface Message {
     jobs?: Job[];
     sources?: Array<{url: string, score: number}>;
     isStreaming?: boolean;
+    isCareerAdvice?: boolean;  // Track if this is a career advice message
 }
 
 interface Job {
@@ -160,8 +161,15 @@ const ChatBotPage: React.FC = () => {
     const [pendingCareerAdvice, setPendingCareerAdvice] = useState<string | null>(null);
     const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false); // Track job search loading state
+    const [jobResultsReceived, setJobResultsReceived] = useState(false); // Track if job results were received
     const chatAreaRef = useRef<HTMLDivElement>(null);
 
+    // Auto-scroll functionality - disabled after job results until new query
+    useEffect(() => {
+        if (chatAreaRef.current && !jobResultsReceived) {
+            chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
+        }
+    }, [messages, isTyping, jobResultsReceived]);
 
     // Handle return from profile page
     useEffect(() => {
@@ -286,7 +294,8 @@ const ChatBotPage: React.FC = () => {
     const handleSendMessage = async () => {
         if (!inputValue.trim()) return;
 
-        // Starting new request
+        // Starting new request - reset job results flag to re-enable auto-scroll
+        setJobResultsReceived(false);
 
         const userMessage: Message = {
             id: Date.now() + Math.random(),
@@ -377,7 +386,8 @@ const ChatBotPage: React.FC = () => {
                         text: '',
                         isUser: false,
                         timestamp: new Date(),
-                        isStreaming: true
+                        isStreaming: true,
+                        isCareerAdvice: true  // Mark as career advice message
                     };
                     setMessages(prev => [...prev, typingMsg]);
                     
@@ -423,8 +433,9 @@ const ChatBotPage: React.FC = () => {
                     hasJobResults = true;
                     waitingForJobResult = false;
                     
-                    // Stop loading animation
+                    // Stop loading animation and disable auto-scroll
                     setIsLoadingJobs(false);
+                    setJobResultsReceived(true); // Disable auto-scroll after job results
 
                     // Clear any pending streaming timeout
                     if (streamingTimeout) {
@@ -736,7 +747,7 @@ const ChatBotPage: React.FC = () => {
                                 </UserMessageWrapper>
                             ) : (
                                 <BotMessageWrapper>
-                                    <BotAvatarImage />
+                                    {message.isCareerAdvice ? <CarrierAvatarImage /> : <BotAvatarImage />}
                                     <BotContentWrapper>
                                         <BotMessageBubble>
                                             <ReactMarkdown
