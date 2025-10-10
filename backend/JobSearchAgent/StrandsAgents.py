@@ -13,9 +13,11 @@ import json
 import os
 from typing import Any, Dict, AsyncIterator
 from dataclasses import dataclass
+import boto3
 from bedrock_agentcore.memory import MemoryClient
 
 from strands import Agent, tool
+from strands.models import BedrockModel
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
@@ -35,11 +37,38 @@ AGENTCORE_USER_PREFERENCE_STRATEGY_ID = os.getenv('AGENTCORE_USER_PREFERENCE_STR
 JOB_SEARCH_KB = os.getenv('JOB_SEARCH_KB') # Job search knowledge base ID - agent should use this for retrieve tool calls
 CARRIER_RESOURCE_KB = os.getenv('CARRIER_RESOURCE_KB')  # Carrier resource knowledge base ID for additional resources
 
+# Cross-account AWS credentials (optional)
+CROSS_ACCOUNT_ACCESS_KEY_ID = os.getenv('CROSS_ACCOUNT_ACCESS_KEY_ID')
+CROSS_ACCOUNT_SECRET_ACCESS_KEY = os.getenv('CROSS_ACCOUNT_SECRET_ACCESS_KEY')
+CROSS_ACCOUNT_REGION = os.getenv('CROSS_ACCOUNT_REGION', AWS_REGION)
+
+# Create custom boto3 session if cross-account credentials are provided
+if CROSS_ACCOUNT_ACCESS_KEY_ID and CROSS_ACCOUNT_SECRET_ACCESS_KEY:
+    print(f"Using cross-account AWS credentials for region: {CROSS_ACCOUNT_REGION}")
+    boto_session = boto3.Session(
+        aws_access_key_id=CROSS_ACCOUNT_ACCESS_KEY_ID,
+        aws_secret_access_key=CROSS_ACCOUNT_SECRET_ACCESS_KEY,
+        region_name=CROSS_ACCOUNT_REGION
+    )
+else:
+    print(f"Using default AWS credentials for region: {AWS_REGION}")
+    boto_session = None  # Will use default credentials
+
 # Fallback handling for missing knowledge bases
 if not CARRIER_RESOURCE_KB:
     print("Warning: CARRIER_RESOURCE_KB not set, career advice may not work properly")
 if not JOB_SEARCH_KB:
     print("Warning: JOB_SEARCH_KB not set, job search may not work properly")
+
+# Create BedrockModel with custom session (if cross-account credentials provided)
+if boto_session:
+    bedrock_model = BedrockModel(
+        model_id="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        boto_session=boto_session
+    )
+else:
+    # Use default model string (will use default AWS credentials)
+    bedrock_model = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 # Specialized Agent Tools using the "Agents as Tools" pattern
 
@@ -320,7 +349,7 @@ def job_search_agent_tool(query: str, session_id: str = "", email: str = "", sou
         # Create a specialized job search agent with updated system prompt
         job_search_agent = Agent(
             tools=tools,
-            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            model=bedrock_model,
             system_prompt=system_prompt
         )
 
@@ -371,7 +400,7 @@ async def career_advice_agent_tool(query: str, session_id: str = "", email: str 
         career_advice_agent = Agent(
             name="Career Advice Specialist",
             tools=tools,
-            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            model=bedrock_model,
             callback_handler=None,  # Suppress sub-agent's own output
             system_prompt=(
                 "You are a specialized Career Advice Agent providing guidance on career development with memory access.\n\n"
@@ -402,7 +431,7 @@ async def career_advice_agent_tool(query: str, session_id: str = "", email: str 
                 "• Include specific examples, tips, and actionable steps whenever possible\n"
                 "• Always end responses by asking if the user wants more details or has follow-up questions to go over in detail"
             )
-            )
+        )
 
         # Add session context if available
         enhanced_query = query
@@ -457,7 +486,7 @@ class MultiAgentJobSearchSystem:
 
         self.orchestrator_agent = Agent(
             tools=tools,
-            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            model=bedrock_model,
             messages=conversation_messages,
             system_prompt=(
                 "You are an Orchestrator Agent for a Career Services platform with full memory access.\n\n"
