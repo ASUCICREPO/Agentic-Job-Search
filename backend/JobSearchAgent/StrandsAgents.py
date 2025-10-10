@@ -462,7 +462,7 @@ class MultiAgentJobSearchSystem:
                 "PERSONALIZED JOB SEARCH WORKFLOW - ONLY FOR EXPLICIT JOB SEARCH REQUESTS:\n"
                 "1) Retrieve profile preferences using get_student_profile and memory tools\n"
                 "2) Ask about specific preferences (exact city/location, job type, company size, remote vs onsite modality), ensure profile completeness, confirm with user before proceeding to showcase job results\n"
-                "   - ALWAYS ask these questions after first user interaction: What city/location are you interested in? What type of job role? What size organization (startup, mid-size, large corporation)? Do you prefer remote, onsite, or hybrid work modality?\n"
+                "   - ALWAYS ask these questions after first user interaction: What city/location are you interested in? What type of job role? What size organization (startup, mid-size, large corporation)? Do you prefer remote, onsite, or hybrid work arrangement?\n"
                 "   - For confirming with user: Share what you found via profile and memory tools, mention the specific questions you should ask based on the above point (if any), and ask if they would like to change any preferences before proceeding with job search\n"
                 "3) Enrich job search query with user's profile (skills, experience, locations, salary expectations)\n"
                 "4) Call job_search_agent_tool with enhanced query and source parameter\n\n"
