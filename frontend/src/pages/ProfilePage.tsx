@@ -519,21 +519,12 @@ const ProfilePage: React.FC = () => {
         processedValue = value.slice(0, 200);
       }
 
-      // Format phone number to +1XXXXXXXXXX format
+      // For phone number, restrict to only digits and plus sign
       if (name === 'phone') {
-        // Remove all non-digit characters
-        const digitsOnly = value.replace(/\D/g, '');
-        // If it starts with 1, remove it and add +1
-        if (digitsOnly.startsWith('1') && digitsOnly.length > 1) {
-          processedValue = '+1' + digitsOnly.slice(1);
-        } else if (digitsOnly.length > 0) {
-          // Add +1 prefix for any digits
-          processedValue = '+1' + digitsOnly;
-        } else {
-          processedValue = '';
-        }
-        // Limit to 12 characters (+1 + 10 digits)
-        processedValue = processedValue.slice(0, 12);
+        // Remove any characters that aren't digits or plus signs
+        processedValue = value.replace(/[^\d+]/g, '');
+        // Limit length to prevent extremely long entries
+        processedValue = processedValue.slice(0, 20);
       }
 
       setFormData(prev => ({ ...prev, [name]: processedValue }));
@@ -542,6 +533,33 @@ const ProfilePage: React.FC = () => {
         setValidationErrors([]);
       }
     };
+
+  const onPhoneBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+
+    // Format phone number only when user leaves the field
+    if (value) {
+      // Remove all non-digit characters
+      const digitsOnly = value.replace(/\D/g, '');
+
+      let formattedValue = '';
+      if (digitsOnly.length === 10) {
+        // Exactly 10 digits: add +1 prefix
+        formattedValue = '+1' + digitsOnly;
+      } else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
+        // 11 digits starting with 1: treat first digit as country code
+        formattedValue = '+1' + digitsOnly.slice(1);
+      } else if (digitsOnly.length > 0) {
+        // Keep as-is for other lengths, but clean up any non-digits
+        formattedValue = digitsOnly;
+      }
+
+      // Limit to reasonable length
+      formattedValue = formattedValue.slice(0, 12);
+
+      setFormData(prev => ({ ...prev, phone: formattedValue }));
+    }
+  };
 
   // Helper function to convert communication method to backend format
   const getCommunicationMethodValue = (methods: string[]): string => {
@@ -732,7 +750,7 @@ const ProfilePage: React.FC = () => {
 
             <Field>
               <Label htmlFor="phone" $required>Phone Number</Label>
-              <Input id="phone" name="phone" placeholder="+1XXXXXXXXXX (10 digits with area code)" value={formData.phone} onChange={onChange} disabled={isUploading || isSaving || isLoadingProfile}/>
+              <Input id="phone" name="phone" placeholder="10 digits (area code + number) or +1XXXXXXXXXX" value={formData.phone} onChange={onChange} onBlur={onPhoneBlur} disabled={isUploading || isSaving || isLoadingProfile}/>
             </Field>
 
             <Field>
