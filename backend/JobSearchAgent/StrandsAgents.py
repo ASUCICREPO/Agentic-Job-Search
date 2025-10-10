@@ -377,17 +377,15 @@ def career_advice_agent_tool(query: str, session_id: str = "", email: str = "") 
                 "• Build on previous feedback and recommendations given\n"
                 "• Remember user's progress and achievements from past interactions\n\n"
                 "RESPONSE GUIDELINES:\n"
-                "• CRITICAL: Limit all responses to maximum 200 words\n"
+                "• CRITICAL: Limit all responses to maximum 200-300 words\n"
                 "• Keep answers concise and avoid lengthy explanations unless user requests more details\n"
                 "• Provide actionable, practical advice based on industry best practices\n"
                 "• Cite relevant resources and provide step-by-step guidance when appropriate\n"
                 "• Focus on helping users advance their careers and achieve their professional goals\n"
                 "• Personalize all advice based on user's conversation history and stored preferences\n"
                 "• Return comprehensive, helpful responses that directly address the user's query\n"
-                "• Include specific examples, tips, and actionable steps whenever possible"
-                "URL EXTRACTION:\n"
-                "• Scan ALL retrieve results for URLs (http://, https://, www., .com, .org, .edu)\n"
-                "• If URLs found: Include in new section 'Web Resources:' with only the URLs in format: https://example.com\n"
+                "• Include specific examples, tips, and actionable steps whenever possible\n"
+                "• Always end responses by asking if the user wants more details or has follow-up questions to go over in detail"
             )
             )
 
@@ -462,7 +460,6 @@ class MultiAgentJobSearchSystem:
                 "PERSONALIZED JOB SEARCH WORKFLOW - ONLY FOR EXPLICIT JOB SEARCH REQUESTS:\n"
                 "1) Retrieve profile preferences using get_student_profile and memory tools\n"
                 "2) Ask about specific preferences(exact city/location, job type, company size, remote vs onsite modality), ensure profile completeness, confirm with user before proceeding to showcase job results\n"
-                "   - ALWAYS ask these questions after first user interaction: What city/location are you interested in? What type of job role? What size organization (startup, mid-size, large corporation)? Do you prefer remote, onsite, or hybrid work arrangement?\n"
                 "   - For confirming with user: Share what you found via profile and memory tools, mention the specific questions you should ask based on the above point (if any), and ask if they would like to change any preferences before proceeding with job search\n"
                 "3) Enrich job search query with user's profile (skills, experience, locations, salary expectations)\n"
                 "4) Call job_search_agent_tool with enhanced query and source parameter\n\n"
