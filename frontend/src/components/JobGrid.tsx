@@ -585,7 +585,7 @@ const JobGrid: React.FC<JobGridProps> = ({ jobs }) => {
           </RequirementsContent>
 
           <WhyThisMatchesContainer>
-            <WhyThisMatchesTitle>Why this matches you</WhyThisMatchesTitle>
+            <WhyThisMatchesTitle>How This Role Aligns With Your Profile</WhyThisMatchesTitle>
             <WhyThisMatchesText>
               {job.fit || "This role aligns with your profile and career goals based on your experience and preferences."}
             </WhyThisMatchesText>
