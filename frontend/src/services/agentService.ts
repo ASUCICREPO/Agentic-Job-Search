@@ -77,7 +77,9 @@ interface StreamingCallbacks {
   onCareerAdviceStarted?: () => void;
   onJobResults?: (jobs: any[], responseText: string) => void;
   onCareerAdvice?: (advice: string) => void;
+  onCareerAdviceStreaming?: (chunk: string) => void;  // Streaming chunks from career advice
   onResponse?: (response: string) => void;
+  onFinalResult?: (result: string) => void;  // Final result indicating streaming complete
   onSources?: (sources: any[]) => void;
   onError?: (error: string) => void;
 }
@@ -124,13 +126,11 @@ export async function invokeAgent(
     const command = new InvokeAgentRuntimeCommand(input);
     const response = await client.send(command);
 
-    // Handle streaming response
-    if (response.response) {
-      try {
-        // Process the streaming response incrementally
-        let buffer = '';
-        let hasReceivedStreamingResponse = false;
-        let careerAdviceReceived = false;
+        // Handle streaming response
+        if (response.response) {
+          try {
+            // Process the streaming response incrementally
+            let buffer = '';
 
         // Use the streaming response body
         const stream = response.response.transformToWebStream();
@@ -173,7 +173,6 @@ export async function invokeAgent(
                   // Handle job results
                   if (data.job_agent_result && callbacks?.onJobResults) {
                     try {
-                      hasReceivedStreamingResponse = true;
                       let jobData: any[] = [];
                       let cleanJobResult = data.job_agent_result.trim();
 
@@ -193,10 +192,13 @@ export async function invokeAgent(
                     }
                   }
 
-                  // Handle career advice results
+                  // Handle career advice streaming chunks (real-time)
+                  if (data.carrier_advice_streaming && callbacks?.onCareerAdviceStreaming) {
+                    callbacks.onCareerAdviceStreaming(data.carrier_advice_streaming);
+                  }
+
+                  // Handle career advice results (final complete response)
                   if (data.carrier_advice_result && callbacks?.onCareerAdvice) {
-                    hasReceivedStreamingResponse = true;
-                    careerAdviceReceived = true;
                     callbacks.onCareerAdvice(data.carrier_advice_result);
                   }
 
@@ -205,15 +207,12 @@ export async function invokeAgent(
                     callbacks.onSources(data.sources);
                   }
 
-                  // Handle regular response (but not if career advice was already received)
-                  if (data.response && callbacks?.onResponse && !careerAdviceReceived) {
-                    hasReceivedStreamingResponse = true;
-                    callbacks.onResponse(data.response);
-                  }
+                  // Ignore 'response' events - they duplicate 'thinking' events from orchestrator
+                  // We only use 'thinking' for orchestrator streaming text
 
-                  // Handle final result (only if no streaming response was received and no career advice)
-                  if (data.final_result && !hasReceivedStreamingResponse && !careerAdviceReceived && callbacks?.onResponse) {
-                    callbacks.onResponse(data.final_result);
+                  // Handle final result - indicates streaming is complete
+                  if (data.final_result && callbacks?.onFinalResult) {
+                    callbacks.onFinalResult(data.final_result);
                   }
 
                   // Handle errors

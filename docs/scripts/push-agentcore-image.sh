@@ -8,6 +8,15 @@ set -euo pipefail
 # 1. Configuration
 # --------------------------------------------------
 
+# Prompt for AWS profile if not set
+if [ -z "${AWS_PROFILE:-}" ]; then
+  read -rp "Enter AWS profile name (default: default): " AWS_PROFILE
+  AWS_PROFILE=${AWS_PROFILE:-default}
+fi
+
+echo "Using AWS profile: $AWS_PROFILE"
+export AWS_PROFILE
+
 # Prompt for AWS region if not set
 if [ -z "${AWS_REGION:-}" ]; then
   read -rp "Enter AWS region (default: us-west-2): " AWS_REGION
@@ -41,7 +50,7 @@ fi
 # --------------------------------------------------
 
 echo "Getting AWS account ID..."
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --profile "$AWS_PROFILE" --query Account --output text)
 echo "AWS Account ID: $AWS_ACCOUNT_ID"
 
 # --------------------------------------------------
@@ -49,13 +58,14 @@ echo "AWS Account ID: $AWS_ACCOUNT_ID"
 # --------------------------------------------------
 
 echo "Checking if ECR repository exists..."
-if aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
+if aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region "$AWS_REGION" --profile "$AWS_PROFILE" >/dev/null 2>&1; then
   echo "✓ ECR repository '$ECR_REPO_NAME' exists"
 else
   echo "Creating ECR repository '$ECR_REPO_NAME'..."
   aws ecr create-repository \
     --repository-name "$ECR_REPO_NAME" \
     --region "$AWS_REGION" \
+    --profile "$AWS_PROFILE" \
     --image-scanning-configuration scanOnPush=true \
     --output json
   echo "✓ ECR repository created"
@@ -66,7 +76,7 @@ fi
 # --------------------------------------------------
 
 echo "Authenticating Docker to ECR..."
-aws ecr get-login-password --region "$AWS_REGION" | \
+aws ecr get-login-password --region "$AWS_REGION" --profile "$AWS_PROFILE" | \
   docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
 if [ $? -eq 0 ]; then
@@ -125,6 +135,7 @@ echo "Image details:"
 aws ecr describe-images \
   --repository-name "$ECR_REPO_NAME" \
   --region "$AWS_REGION" \
+  --profile "$AWS_PROFILE" \
   --image-ids imageTag="$IMAGE_TAG" \
   --output table
 

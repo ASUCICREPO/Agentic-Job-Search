@@ -9,6 +9,7 @@
     "@aws-sdk/client-cognito-identity": "^3.883.0",
     "@aws-sdk/client-s3": "^3.884.0",
     "@aws-sdk/credential-provider-cognito-identity": "^3.883.0",
+    "@lottiefiles/dotlottie-react": "^0.17.5",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",

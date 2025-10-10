@@ -90,6 +90,10 @@ export const ChatArea = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
+  scroll-behavior: smooth;
+  
+  /* Optimize scrolling performance */
+  -webkit-overflow-scrolling: touch;
 
   @media (max-width: 480px) {
     padding: 12px 0;
@@ -131,6 +135,13 @@ export const BotMessageBubble = styled.div`
   font-size: 0.95rem;
   line-height: 1.4;
   position: relative;
+  
+  /* Smooth text rendering for streaming */
+  will-change: contents;
+  
+  p, span, div {
+    transition: opacity 0.1s ease-out;
+  }
 
   @media (max-width: 480px) {
     padding: 12px 16px;
