@@ -457,38 +457,6 @@ const ChatBotPage: React.FC = () => {
                                         : msg
                                 )
                             );
-                        } else {
-                            // Fallback: create new message if no streaming message exists
-                            const botMessage: Message = {
-                                id: Date.now() + Math.random(),
-                                text: responseText || 'Here are your job recommendations:',
-                                isUser: false,
-                                timestamp: new Date(),
-                                jobs: jobs
-                            };
-                            setMessages(prev => [...prev, botMessage]);
-                        }
-                    } else {
-                        const errorText = "Sorry, I couldn't find any job opportunities at the moment. Please try again later.";
-
-                        // Update the orchestrator message with error
-                        if (streamingMessageId) {
-                            setMessages(prev =>
-                                prev.map(msg =>
-                                    msg.id === streamingMessageId
-                                        ? { ...msg, text: errorText, isStreaming: false }
-                                        : msg
-                                )
-                            );
-                        } else {
-                            // Fallback: create new message if no streaming message exists
-                            const errorMessage: Message = {
-                                id: Date.now() + Math.random(),
-                                text: errorText,
-                                isUser: false,
-                                timestamp: new Date()
-                            };
-                            setMessages(prev => [...prev, errorMessage]);
                         }
                     }
                 },
