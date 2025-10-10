@@ -169,7 +169,7 @@ const ChatBotPage: React.FC = () => {
         if (chatAreaRef.current && !jobResultsReceived) {
             chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
         }
-    }, [messages, isTyping, jobResultsReceived]);
+    }, [messages, isTyping, isLoadingJobs, jobResultsReceived]);
 
     // Handle return from profile page
     useEffect(() => {
