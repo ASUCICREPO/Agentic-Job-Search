@@ -7,7 +7,6 @@ import { invokeAgent } from '../services/agentService';
 import { getJobRecommendations, parseSmsLinkParams } from '../services/jobRecommendationsService';
 import { getProfile } from '../services/profileService';
 import JobGrid from '../components/JobGrid';
-import loadingAnimation from '../assets/loadinganimation.lottie';
 import {
   ChatContainer,
   Header,
@@ -839,7 +838,7 @@ const ChatBotPage: React.FC = () => {
                             height: '250px'
                         }}>
                             <DotLottieReact
-                                src={loadingAnimation}
+                                src="/loadinganimation.lottie"
                                 loop
                                 autoplay
                             />
