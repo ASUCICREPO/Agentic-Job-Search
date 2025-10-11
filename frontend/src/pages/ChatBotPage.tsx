@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import Lottie from 'lottie-react';
 import { ASULogoImage, UserAvatarImage, BotAvatarImage, CarrierAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
 import { getJobRecommendations, parseSmsLinkParams } from '../services/jobRecommendationsService';
@@ -161,7 +161,16 @@ const ChatBotPage: React.FC = () => {
     const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false); // Track job search loading state
     const [jobResultsReceived, setJobResultsReceived] = useState(false); // Track if job results were received
+    const [lottieAnimationData, setLottieAnimationData] = useState<any>(null);
     const chatAreaRef = useRef<HTMLDivElement>(null);
+
+    // Load Lottie animation data
+    useEffect(() => {
+        fetch(process.env.PUBLIC_URL + '/loadinganimation.json')
+            .then(response => response.json())
+            .then(data => setLottieAnimationData(data))
+            .catch(error => console.error('Error loading Lottie animation:', error));
+    }, []);
 
     // Auto-scroll functionality - disabled after job results until new query
     useEffect(() => {
@@ -837,11 +846,13 @@ const ChatBotPage: React.FC = () => {
                             width: '250px', 
                             height: '250px'
                         }}>
-                            <DotLottieReact
-                                src={process.env.PUBLIC_URL + '/loadinganimation.lottie'}
-                                loop={true}
-                                autoplay={true}
-                            />
+                            {lottieAnimationData && (
+                                <Lottie
+                                    animationData={lottieAnimationData}
+                                    loop={true}
+                                    autoplay={true}
+                                />
+                            )}
                         </div>
                     </div>
                 )}
