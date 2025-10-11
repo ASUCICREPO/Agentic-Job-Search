@@ -838,10 +838,9 @@ const ChatBotPage: React.FC = () => {
                             height: '250px'
                         }}>
                             <DotLottieReact
-                                src={`${window.location.origin}/loadinganimation.lottie`}
+                                src={process.env.PUBLIC_URL + '/loadinganimation.lottie'}
                                 loop={true}
                                 autoplay={true}
-                                speed={1}
                             />
                         </div>
                     </div>
