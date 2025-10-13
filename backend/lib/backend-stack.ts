@@ -362,6 +362,10 @@ export class jobsearch1 extends cdk.Stack {
     new bedrock.S3DataSource(this, "JobDataSource", {
       bucket: JobsBucket,
       knowledgeBase: kb,
+      chunkingStrategy: bedrock.ChunkingStrategy.fixedSize({
+        maxTokens: 1500,
+        overlapPercentage: 20, // 20% overlap between chunks for better context continuity
+      }),
       contextEnrichment: ContextEnrichment.foundationModel({
         enrichmentModel:
           bedrock.BedrockFoundationModel.ANTHROPIC_CLAUDE_HAIKU_V1_0,
