@@ -358,6 +358,7 @@ interface Job {
   experience: string;
   fit?: string;
   remote?: string;
+  external_apply_url?: string;
 }
 
 interface JobGridProps {
@@ -439,6 +440,31 @@ const JobGrid: React.FC<JobGridProps> = ({ jobs }) => {
     }
 
     return `$${lowerNum.toLocaleString()}-$${upperNum.toLocaleString()}/year`;
+  };
+
+  const handleApplyClick = (job: Job) => {
+    // Debug: Log job data to see what's available
+    console.log('Job data:', job);
+    console.log('External apply URL:', job.external_apply_url);
+
+    if (job.external_apply_url && job.external_apply_url.trim() !== '' && job.external_apply_url !== 'Not specified') {
+      // Open external apply URL in new tab
+      console.log('Opening URL:', job.external_apply_url);
+      window.open(job.external_apply_url, '_blank', 'noopener,noreferrer');
+    } else {
+      // Generate a reasonable careers page URL based on company name
+      const companyName = job.company.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const careersUrl = `https://www.${companyName}.com/careers`;
+
+      console.log('No apply URL found, trying careers page:', careersUrl);
+
+      // Try to open the generated careers URL
+      const userConfirmed = window.confirm(`No direct apply link found. Would you like to visit ${job.company}'s careers page?\n\n${careersUrl}`);
+
+      if (userConfirmed) {
+        window.open(careersUrl, '_blank', 'noopener,noreferrer');
+      }
+    }
   };
 
   const saveProfileChanges = async (updatedNotifications: { [jobId: string]: boolean }) => {
@@ -592,7 +618,7 @@ const JobGrid: React.FC<JobGridProps> = ({ jobs }) => {
           </WhyThisMatchesContainer>
 
           <ButtonContainer>
-            <ApplyButton onClick={() => alert(`Applying to ${job.title} at ${job.company}`)}>
+            <ApplyButton onClick={() => handleApplyClick(job)}>
               Apply Now
             </ApplyButton>
           </ButtonContainer>
