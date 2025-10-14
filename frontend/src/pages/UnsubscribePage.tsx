@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import './UnsubscribePage.css';
-
-const SAVE_PROFILE_URL = process.env.REACT_APP_SAVE_PROFILE_URL;
+import { SAVE_PROFILE_URL } from '../utils/constants';
 
 const UnsubscribePage: React.FC = () => {
   const [searchParams] = useSearchParams();
