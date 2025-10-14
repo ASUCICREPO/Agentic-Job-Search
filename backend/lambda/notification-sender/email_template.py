@@ -144,7 +144,7 @@ def generate_html_email(first_name, category_display, job_recommendations, user_
                 description = job.get('description', job.get('summary', ''))
                 requirements = job.get('requirements', job.get('qualifications', ''))
                 match_reason = job.get('fit', job.get('match_reason', 'Great match for your profile!'))
-                apply_url = job.get('apply_url', job.get('url', '#'))
+                apply_url = job.get('external_apply_url', job.get('apply_url', job.get('url', '#')))
                 
                 html_content += f"""
                         <div class="job-item">
@@ -265,7 +265,7 @@ Here are your personalized {category_display.lower()} recommendations for today:
                 salary = job.get('salary', job.get('compensation', ''))
                 job_type = job.get('type', job.get('employment_type', 'Full-Time'))
                 match_reason = job.get('fit', job.get('match_reason', 'Great match for your profile!'))
-                apply_url = job.get('apply_url', job.get('url', 'Contact employer directly'))
+                apply_url = job.get('external_apply_url', job.get('apply_url', job.get('url', 'Contact employer directly')))
                 
                 text_content += f"""
 {job_counter}. {title}

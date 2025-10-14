@@ -183,6 +183,7 @@ export async function invokeAgent(
                       }
 
                       jobData = JSON.parse(cleanJobResult);
+                      console.log('Job search results from backend:', JSON.stringify(jobData, null, 2));
                       callbacks.onJobResults(jobData, data.response || "Here are your job recommendations:");
                     } catch (error) {
                       console.error('Error parsing job data:', error);
