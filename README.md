@@ -2,6 +2,9 @@
 
 A comprehensive chatbot application that provides intelligent job search and career guidance for students, powered by AWS Bedrock AgentCore and cutting-edge AI technologies.
 
+## Demo Video
+*[Demo video link will be added here]*
+
 ## Index
 
 | Description | Link |
@@ -41,8 +44,6 @@ For a detailed deep dive into the architecture, including core principles, compo
 
 For a detailed overview of the user journey and application workflow, including diagrams and step-by-step user interactions, see [docs/USERFLOW.md](docs/USERFLOW.md).
 
-## Demo Video
-*[Demo video link will be added here]*
 
 ## Deployment
 
