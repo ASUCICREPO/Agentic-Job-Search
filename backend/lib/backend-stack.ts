@@ -548,6 +548,7 @@ export class jobsearch1 extends cdk.Stack {
     const identityPool = new cognito.CfnIdentityPool(this, "JobSearchIdentityPool", {
       identityPoolName: `jobsearch-identity-pool-${timestamp}`,
       allowUnauthenticatedIdentities: true,
+      allowClassicFlow: true, // Enable classic flow to avoid session policy restrictions
     });
 
     // Create IAM role for unauthenticated users with minimal permissions
