@@ -18,6 +18,8 @@ A comprehensive chatbot application that provides intelligent job search and car
 | Post-Deployment Setup | [Post-Deployment Setup](docs/POST_DEPLOYMENT_SETUP.md) |
 | Usage | [Usage](#usage) |
 | Infrastructure | [Infrastructure](docs/INFRASTRUCTURE.MD) |
+| Modification Guide | [Modification Guide](#modification-guide) |
+| Credits | [Credits](#credits) |
 | License | [License](#license) |
 
 ## Overview
@@ -62,6 +64,14 @@ For a detailed overview of the application infrastructure, including component i
 - **[API Documentation](docs/API_DOCUMENTATION.md)** - Comprehensive API reference for all endpoints, request/response formats, and integration patterns
 - **[Post-Deployment Setup Guide](docs/POST_DEPLOYMENT_SETUP.md)** - Configuration steps after infrastructure deployment
 - **[User Flow Documentation](docs/USERFLOW.md)** - Detailed system architecture and user journey documentation
+
+## Modification Guide
+
+Steps to implement optional modifications such as changing the bedrock Model, adding more checks, or changing the frontend can be found [here](docs/modificationGuide.md).
+
+## Credits
+
+This application was architected and developed by [Aryan Khanna](https://www.linkedin.com/in/aryankhanna2004/), [Aarav Matalia](https://www.linkedin.com/in/aarav-matalia/), [Sayantika Paul](https://www.linkedin.com/in/sayantikapaul12/) and [Lahari Shakthi Arun](https://www.linkedin.com/in/shakthiarun22/) with solutions architect [Arun Arunachalam](https://www.linkedin.com/in/arunarunachalam/), program manager [Thomas Orr](https://www.linkedin.com/in/thomas-orr/) and product manager [Rachel Hayden](https://www.linkedin.com/in/rachelhayden/). Thanks to the ASU Cloud Innovation Centre and Career Services' Technical and Project Management teams for their guidance and support.
 
 ## License
 
