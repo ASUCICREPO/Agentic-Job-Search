@@ -358,6 +358,7 @@ interface Job {
   experience: string;
   fit?: string;
   remote?: string;
+  external_apply_url?: string;
 }
 
 interface JobGridProps {
@@ -439,6 +440,13 @@ const JobGrid: React.FC<JobGridProps> = ({ jobs }) => {
     }
 
     return `$${lowerNum.toLocaleString()}-$${upperNum.toLocaleString()}/year`;
+  };
+
+  const handleApplyClick = (job: Job) => {
+    console.log('External apply URL:', job.external_apply_url);
+    if (job.external_apply_url && job.external_apply_url.trim() !== '' && job.external_apply_url !== 'Not specified') {
+      window.open(job.external_apply_url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const saveProfileChanges = async (updatedNotifications: { [jobId: string]: boolean }) => {
@@ -585,14 +593,14 @@ const JobGrid: React.FC<JobGridProps> = ({ jobs }) => {
           </RequirementsContent>
 
           <WhyThisMatchesContainer>
-            <WhyThisMatchesTitle>How This Role Aligns With Your Profile</WhyThisMatchesTitle>
+            <WhyThisMatchesTitle>Why this matches you</WhyThisMatchesTitle>
             <WhyThisMatchesText>
               {job.fit || "This role aligns with your profile and career goals based on your experience and preferences."}
             </WhyThisMatchesText>
           </WhyThisMatchesContainer>
 
           <ButtonContainer>
-            <ApplyButton onClick={() => alert(`Applying to ${job.title} at ${job.company}`)}>
+            <ApplyButton onClick={() => handleApplyClick(job)}>
               Apply Now
             </ApplyButton>
           </ButtonContainer>
