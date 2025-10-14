@@ -1,3 +1,5 @@
+import { JOB_RECOMMENDATIONS_API_URL } from '../utils/constants';
+
 export interface JobRecommendation {
   userJobKey: string;
   createdAt: string;
@@ -5,8 +7,6 @@ export interface JobRecommendation {
   jobCategory: string;
   jobInformation: any[];
 }
-
-const JOB_RECOMMENDATIONS_API_URL = process.env.REACT_APP_JOB_RECOMMENDATIONS_API_URL;
 
 function requireApiUrl() {
   if (!JOB_RECOMMENDATIONS_API_URL) {
