@@ -19,6 +19,7 @@ import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as amplify from "@aws-cdk/aws-amplify-alpha";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId, } from "aws-cdk-lib/custom-resources";
+import * as cognito from "aws-cdk-lib/aws-cognito";
 
 export class jobsearch1 extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -543,13 +544,30 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    // Create IAM user for frontend with minimal AgentCore InvokeAgentRuntime policy
-    const frontendUser = new iam.User(this, "FrontendUser", {
-      userName: `jobsearch-frontend-user-${timestamp}`,
+    // Create Cognito Identity Pool for unauthenticated (guest) access
+    const identityPool = new cognito.CfnIdentityPool(this, "JobSearchIdentityPool", {
+      identityPoolName: `jobsearch-identity-pool-${timestamp}`,
+      allowUnauthenticatedIdentities: true,
+    });
+
+    // Create IAM role for unauthenticated users with minimal permissions
+    const unauthenticatedRole = new iam.Role(this, "UnauthenticatedRole", {
+      assumedBy: new iam.FederatedPrincipal(
+        "cognito-identity.amazonaws.com",
+        {
+          StringEquals: {
+            "cognito-identity.amazonaws.com:aud": identityPool.ref,
+          },
+          "ForAnyValue:StringLike": {
+            "cognito-identity.amazonaws.com:amr": "unauthenticated",
+          },
+        },
+        "sts:AssumeRoleWithWebIdentity"
+      ),
     });
 
     // Attach minimal policy for AgentCore runtime invocation
-    frontendUser.addToPolicy(
+    unauthenticatedRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock-agentcore:InvokeAgentRuntime"],
@@ -557,10 +575,15 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    ResumeBucket.grantWrite(frontendUser);
-    // Create access key for the frontend user
-    const accessKey = new iam.AccessKey(this, "FrontendAccessKey", {
-      user: frontendUser,
+    // Grant S3 write access to resume bucket
+    ResumeBucket.grantWrite(unauthenticatedRole);
+
+    // Attach roles to identity pool
+    new cognito.CfnIdentityPoolRoleAttachment(this, "IdentityPoolRoleAttachment", {
+      identityPoolId: identityPool.ref,
+      roles: {
+        unauthenticated: unauthenticatedRole.roleArn,
+      },
     });
 
     const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
@@ -672,8 +695,7 @@ export class jobsearch1 extends cdk.Stack {
     mainBranch.addEnvironment('REACT_APP_SAVE_PROFILE_URL', saveProfileUrl.url);
     mainBranch.addEnvironment('REACT_APP_JOB_RECOMMENDATIONS_API_URL', jobRecommendationsApi.url);
     mainBranch.addEnvironment('REACT_APP_RESUME_BUCKET', ResumeBucket.bucketName);
-    mainBranch.addEnvironment('REACT_APP_AWS_ACCESS_KEY_ID', accessKey.accessKeyId);
-    mainBranch.addEnvironment('REACT_APP_AWS_SECRET_ACCESS_KEY', accessKey.secretAccessKey.unsafeUnwrap());
+    mainBranch.addEnvironment('REACT_APP_COGNITO_IDENTITY_POOL_ID', identityPool.ref);
 
 
     new cdk.CfnOutput(this, "DockerImageURI", {
@@ -746,11 +768,11 @@ export class jobsearch1 extends cdk.Stack {
       exportName: "StudentProfileTable",
     });
 
-    // Export frontend IAM user details
-    new cdk.CfnOutput(this, "FrontendUserName", {
-      value: frontendUser.userName,
-      description: "IAM user created with minimal AgentCore InvokeAgentRuntime policy",
-      exportName: "FrontendUserName",
+    // Export Cognito Identity Pool ID
+    new cdk.CfnOutput(this, "CognitoIdentityPoolId", {
+      value: identityPool.ref,
+      description: "Cognito Identity Pool ID for unauthenticated access with minimal AgentCore permissions",
+      exportName: "CognitoIdentityPoolId",
     });
 
     // Export the role ARN

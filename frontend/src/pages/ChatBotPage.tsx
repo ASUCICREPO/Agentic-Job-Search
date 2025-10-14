@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
-import { ASULogoImage, UserAvatarImage, BotAvatarImage, CarrierAvatarImage } from '../components/ImageAssets';
+import { ASULogoImage, UserAvatarImage, BotAvatarImage } from '../components/ImageAssets';
 import { invokeAgent } from '../services/agentService';
 import { getJobRecommendations, parseSmsLinkParams } from '../services/jobRecommendationsService';
 import { getProfile } from '../services/profileService';
@@ -714,7 +714,7 @@ const ChatBotPage: React.FC = () => {
                                 </UserMessageWrapper>
                             ) : (
                                 <BotMessageWrapper>
-                                    {message.isCareerAdvice ? <CarrierAvatarImage /> : <BotAvatarImage />}
+                                    <BotAvatarImage />
                                     <BotContentWrapper>
                                         <BotMessageBubble>
                                             <ReactMarkdown

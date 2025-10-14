@@ -1,5 +1,8 @@
 import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore';
+import { CognitoIdentityClient } from '@aws-sdk/client-cognito-identity';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
 import { getUserEmail } from '../utils/cookieUtils';
+import { AWS_REGION, COGNITO_IDENTITY_POOL_ID, AGENT_RUNTIME_ARN, AGENT_QUALIFIER } from '../utils/constants';
 
 // Session management utility - generates new session ID on every page refresh
 const SESSION_STORAGE_KEY = 'agentic_job_search_session_id';
@@ -89,12 +92,13 @@ export async function invokeAgent(
   callbacks?: StreamingCallbacks
 ): Promise<void> {
   try {
+    // Use Cognito Identity Pool for temporary credentials
     const client = new BedrockAgentCoreClient({
-      region: process.env.REACT_APP_AWS_REGION!,
-      credentials: {
-        accessKeyId: process.env.REACT_APP_AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY!,
-      },
+      region: AWS_REGION!,
+      credentials: fromCognitoIdentityPool({
+        client: new CognitoIdentityClient({ region: AWS_REGION! }),
+        identityPoolId: COGNITO_IDENTITY_POOL_ID!,
+      }),
     });
 
     // Use persistent session ID for consistency across interactions
@@ -118,8 +122,8 @@ export async function invokeAgent(
 
     const input = {
       runtimeSessionId: runtimeSessionId,
-      agentRuntimeArn: process.env.REACT_APP_AGENT_RUNTIME_ARN!,
-      qualifier: process.env.REACT_APP_AGENT_QUALIFIER || "DEFAULT",
+      agentRuntimeArn: AGENT_RUNTIME_ARN!,
+      qualifier: AGENT_QUALIFIER,
       payload: new TextEncoder().encode(JSON.stringify(payload)),
     };
 

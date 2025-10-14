@@ -1,14 +1,13 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-
-const REGION = process.env.REACT_APP_AWS_REGION;
-const ACCESS_KEY_ID = process.env.REACT_APP_AWS_ACCESS_KEY_ID;
-const SECRET_ACCESS_KEY = process.env.REACT_APP_AWS_SECRET_ACCESS_KEY;
-
-const RESUME_BUCKET = process.env.REACT_APP_RESUME_BUCKET;
-
-const RESUME_PROCESSOR_URL = process.env.REACT_APP_RESUME_PROCESSOR_URL;
-
-const SAVE_PROFILE_URL = process.env.REACT_APP_SAVE_PROFILE_URL;
+import { CognitoIdentityClient } from '@aws-sdk/client-cognito-identity';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
+import { 
+  AWS_REGION, 
+  COGNITO_IDENTITY_POOL_ID, 
+  RESUME_BUCKET, 
+  RESUME_PROCESSOR_URL, 
+  SAVE_PROFILE_URL 
+} from '../utils/constants';
 
 export interface ProfileData {
   fullName: string;
@@ -27,14 +26,11 @@ export interface ProfileData {
 
 // ---------- helpers ----------
 function requireBrowserCreds() {
-  if (!REGION) {
+  if (!AWS_REGION) {
     throw new Error('REACT_APP_AWS_REGION environment variable is required');
   }
-  if (!ACCESS_KEY_ID) {
-    throw new Error('REACT_APP_AWS_ACCESS_KEY_ID environment variable is required');
-  }
-  if (!SECRET_ACCESS_KEY) {
-    throw new Error('REACT_APP_AWS_SECRET_ACCESS_KEY environment variable is required');
+  if (!COGNITO_IDENTITY_POOL_ID) {
+    throw new Error('REACT_APP_COGNITO_IDENTITY_POOL_ID environment variable is required');
   }
   if (!RESUME_BUCKET) {
     throw new Error('REACT_APP_RESUME_BUCKET environment variable is required');
@@ -50,11 +46,11 @@ function requireBrowserCreds() {
 function s3(): S3Client {
   requireBrowserCreds();
   return new S3Client({
-    region: REGION!,
-    credentials: {
-      accessKeyId: ACCESS_KEY_ID!,
-      secretAccessKey: SECRET_ACCESS_KEY!,
-    },
+    region: AWS_REGION!,
+    credentials: fromCognitoIdentityPool({
+      client: new CognitoIdentityClient({ region: AWS_REGION! }),
+      identityPoolId: COGNITO_IDENTITY_POOL_ID!,
+    }),
   });
 }
 
