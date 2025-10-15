@@ -62,19 +62,49 @@ Request body:
 - `200`: `{"success": true, "parsed_data": {...}, "message": "Resume parsed successfully"}`
 - `500`: `{"success": false, "error": "Error message", "message": "Failed to parse resume"}`
 
-## 2) Job Search & Career Advice (Bedrock AgentCore Integration)
+## 2) Job Search & Career Advice (Agent Proxy Lambda)
 
-**Note**: Job search and career advice are handled through Bedrock AgentCore runtime integration, not direct REST endpoints. These are accessed via:
+**POST** `{AGENT_PROXY_LAMBDA_URL}` — Invoke Bedrock AgentCore for job search and career advice
 
-- **Interactive Search**: Frontend integrates directly with AgentCore using AWS SDK
-- **Batch Processing**: Automated daily processing through SQS → AgentCore pipeline
+Purpose: Proxy requests to Bedrock AgentCore, bypassing Cognito session policy restrictions for unauthenticated users
+
+**CORS**: Enabled for all origins with POST/OPTIONS methods
+
+**Why Agent Proxy?**
+- AWS Cognito Identity applies restrictive session policies for unauthenticated users
+- These policies block `bedrock-agentcore:InvokeAgentRuntime` actions
+- The Lambda proxy has proper IAM permissions to invoke AgentCore on behalf of users
+- Enables seamless guest user experience without requiring sign-up
+
+**Request Body:**
+```json
+{
+  "runtimeSessionId": "33+ character session identifier",
+  "payload": {
+    "prompt": "User's job search query or career question",
+    "email": "user@asu.edu (optional)",
+    "session_id": "33+ character session identifier",
+    "source": "livesearch"
+  }
+}
+```
+
+**Response:**
+- Returns base64-encoded streaming response from Bedrock AgentCore
+- Format: Server-Sent Events (SSE) with "data: {json}\n\n" messages
+- Frontend decodes and processes the stream in real-time
+
+**Response Examples:**
+- `200`: Base64-encoded SSE stream with job results and career advice
+- `400`: `{"error": "Missing runtimeSessionId"}` or `{"error": "Missing payload"}`
+- `500`: `{"error": "Error message from AgentCore invocation"}`
 
 ### AgentCore Integration Details:
-- **Runtime ARN**: Uses Bedrock AgentCore runtime for AI-powered responses
+- **Authentication**: Lambda IAM role (no Cognito credentials needed)
 - **Session Management**: Requires 33+ character session IDs for proper tracking
-- **Streaming Responses**: Server-Sent Events (SSE) format: "data: {json}\n\n"
+- **Streaming Responses**: Server-Sent Events (SSE) format decoded from base64
 - **Multi-Agent System**: Orchestrator routes to specialized Job Search and Career Advice agents
-- **Timeout**: 15-minute timeout for complex processing
+- **Timeout**: 5-minute timeout for Lambda proxy (configurable)
 - **Memory Integration**: Conversation history and preferences stored via AgentCore Memory
 
 ### Available AgentCore Capabilities:
@@ -86,9 +116,9 @@ Request body:
 - Session-based conversation continuity
 
 ### Integration Methods:
-1. **Frontend SDK Integration**: Direct AWS SDK calls to AgentCore runtime
-2. **SQS Processing**: Batch jobs use SQS → Lambda → AgentCore pipeline
-3. **Payload Format**:
+1. **Frontend HTTP Integration**: HTTP POST to Agent Proxy Lambda Function URL
+2. **SQS Processing**: Batch jobs use SQS → Lambda → AgentCore pipeline (direct, no proxy)
+3. **Payload Format** (sent to AgentCore by proxy):
 ```json
 {
   "prompt": "Enhanced job search query with user profile data",

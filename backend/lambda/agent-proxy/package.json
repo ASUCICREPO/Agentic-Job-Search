@@ -1,0 +1,10 @@
+{
+  "name": "agent-proxy",
+  "version": "1.0.0",
+  "description": "Agent proxy Lambda function with response streaming",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "^3.665.0",
+    "@types/aws-lambda": "^8.10.145"
+  }
+}
