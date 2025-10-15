@@ -163,25 +163,11 @@ AWS Region: [your-deployment-region]
    - Click "Create agent"
    - **Copy the Agent Runtime ARN** from "View invocation code" - you'll need this next
 
-## Step 4: Update Amplify Environment Variables
+## Step 4: Update Lambda Environment Variables
 
-1. **Navigate to Amplify**:
-   - Search for "Amplify" in the AWS Console
-   - Select your "AmplifyFrontendUI" application
+You need to update two Lambda functions with the Agent Runtime ARN from Step 3:
 
-2. **Update Environment Variables**:
-   - Go to "Hosting"
-   - Click on "Environment variables"
-   - Find `REACT_APP_AGENT_RUNTIME_ARN`
-   - Update it with the Agent Runtime ARN from Step 3
-   - Save changes
-
-3. **Redeploy Frontend**:
-   - Go back to "Overview"
-   - Click on the "main" branch
-   - Click "Redeploy this version" to use the latest environment variables
-
-## Step 5: Update Lambda Environment Variables
+### 4A: Update SQS Processor Lambda
 
 1. **Navigate to Lambda**:
    - Search for "Lambda" in the AWS Console
@@ -191,11 +177,26 @@ AWS Region: [your-deployment-region]
    - Click on the SQSProcessor Lambda function
    - Go to "Configuration" tab
    - Select "Environment variables"
-   - Update the AgentCore environment variables with the values from Step 3:
-     - `REACT_APP_AGENT_RUNTIME_ARN` (Agent Runtime ARN from Step 3)
-   - Save changes
+   - Click "Edit"
+   - Update `BEDROCK_AGENTCORE_RUNTIME_ARN` with the Agent Runtime ARN from Step 3
+   - Click "Save"
 
-## Step 6: Upload Data and Sync Knowledge Bases
+### 4B: Update Agent Proxy Lambda
+
+1. **Navigate to Agent Proxy Lambda**:
+   - In Lambda console, search for "AgentProxy" function
+   - Click on the AgentProxyLambda function
+
+2. **Update Environment Variables**:
+   - Go to "Configuration" tab
+   - Select "Environment variables"
+   - Click "Edit"
+   - Update `AGENT_RUNTIME_ARN` with the Agent Runtime ARN from Step 3
+   - Click "Save"
+
+**💡 Note**: The Agent Proxy Lambda bypasses Cognito session policy restrictions, allowing unauthenticated users to invoke the Bedrock AgentCore without permission issues. The frontend automatically uses the Agent Proxy URL (set during CDK deployment), so no Amplify environment variable updates are needed.
+
+## Step 5: Upload Data and Sync Knowledge Bases
 
 Before testing your application, you need to upload job postings and career resources, then sync the knowledge bases.
 
@@ -241,13 +242,13 @@ After uploading files, you must sync the knowledge bases to make the data search
 - If sync fails, check that your S3 buckets contain supported file formats
 - You can monitor sync progress in the knowledge base details page
 
-## Step 7: SES Email Verification
+## Step 6: SES Email Verification
 
 1. **Check Your Email**:
    - An email will be sent from AWS to the admin email address you provided during deployment
    - If you can't find the email, check your Spam folder and verify by clicking the confirmation link
 
-## Step 8: Access and Use the Application
+## Step 7: Access and Use the Application
 
 1. **Access the Frontend**:
    - Go to AWS Console > AWS Amplify
@@ -292,7 +293,6 @@ After completing all steps above:
 
 - **Knowledge Base Creation Issues**: Ensure the S3 bucket name is exactly as shown in CodeBuild output
 - **Agent Runtime Issues**: Verify all environment variables are set correctly
-- **Frontend Connection Issues**: Ensure the Agent Runtime ARN is correctly updated in Amplify
 - **Lambda Issues**: Check CloudWatch logs for detailed error messages
 
 ## Important Notes

@@ -341,6 +341,41 @@ export class jobsearch1 extends cdk.Stack {
     // Grant save-profile Lambda permissions to write to DynamoDB
     StudentProfileTable.grantReadWriteData(saveProfile);
 
+    // Agent Proxy Lambda - Handles agent invocations via HTTP
+    const agentProxyLambda = new lambda.Function(this, "AgentProxyLambda", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: "index.handler",
+      timeout: cdk.Duration.minutes(5),
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, "..", "lambda", "agent-proxy")
+      ),
+      environment: {
+        AGENT_RUNTIME_ARN: "MANUALLY_ADD_HERE", // Will be updated after agent deployment
+        AGENT_QUALIFIER: "DEFAULT",
+      },
+      architecture: lambdaArchitecture,
+    });
+
+    // Grant Agent Proxy Lambda permission to invoke Bedrock AgentCore
+    agentProxyLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock-agentcore:InvokeAgentRuntime"],
+        resources: ["*"],
+      })
+    );
+
+    // Add Function URL for direct frontend access
+    const agentProxyUrl = agentProxyLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
+      cors: {
+        allowedOrigins: ["*"],
+        allowedMethods: [lambda.HttpMethod.POST],
+        allowedHeaders: ["Content-Type"],
+      },
+    });
+
     const kb = new bedrock.GraphKnowledgeBase(this, "JobKnowledgeBase", {
       description: "Knowledge base with jobs from multiple sources - contains all job listings updated daily",
       embeddingModel: bedrock.BedrockFoundationModel.TITAN_EMBED_TEXT_V2_1024,
@@ -548,7 +583,6 @@ export class jobsearch1 extends cdk.Stack {
     const identityPool = new cognito.CfnIdentityPool(this, "JobSearchIdentityPool", {
       identityPoolName: `jobsearch-identity-pool-${timestamp}`,
       allowUnauthenticatedIdentities: true,
-      allowClassicFlow: true, // Enable classic flow to avoid session policy restrictions
     });
 
     // Create IAM role for unauthenticated users with minimal permissions
@@ -566,15 +600,6 @@ export class jobsearch1 extends cdk.Stack {
         "sts:AssumeRoleWithWebIdentity"
       ),
     });
-
-    // Attach minimal policy for AgentCore runtime invocation
-    unauthenticatedRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["bedrock-agentcore:InvokeAgentRuntime"],
-        resources: ["*"], // Can be restricted to specific agent ARNs if needed
-      })
-    );
 
     // Grant S3 write access to resume bucket
     ResumeBucket.grantWrite(unauthenticatedRole);
@@ -692,6 +717,7 @@ export class jobsearch1 extends cdk.Stack {
     mainBranch.addEnvironment('REACT_APP_AGENT_QUALIFIER', 'DEFAULT');
     mainBranch.addEnvironment('REACT_APP_AGENT_RUNTIME_ARN', 'MANUALLY ADD HERE');
     mainBranch.addEnvironment('REACT_APP_AWS_REGION', aws_region);
+    mainBranch.addEnvironment('REACT_APP_AGENT_PROXY_URL', agentProxyUrl.url);
     mainBranch.addEnvironment('REACT_APP_RESUME_PROCESSOR_URL', resumeProcessorUrl.url);
     mainBranch.addEnvironment('REACT_APP_SAVE_PROFILE_URL', saveProfileUrl.url);
     mainBranch.addEnvironment('REACT_APP_JOB_RECOMMENDATIONS_API_URL', jobRecommendationsApi.url);
@@ -742,6 +768,13 @@ export class jobsearch1 extends cdk.Stack {
       description: "Lambda Function URL for resume parser endpoint",
       exportName: "ResumeProcessorUrl",
     });
+
+    new cdk.CfnOutput(this, "AgentProxyUrl", {
+      value: agentProxyUrl.url,
+      description: "Lambda Function URL for agent proxy endpoint",
+      exportName: "AgentProxyUrl",
+    });
+
 
     new cdk.CfnOutput(this, "JobRecommendationsApiUrl", {
       value: jobRecommendationsApi.url,

@@ -31,10 +31,12 @@ The Job Search Assistant implements a **serverless, event-driven architecture** 
 **1. User Interaction Layer**
 
 ```
-Frontend (React/Amplify) → API Gateway → Lambda Functions
+Frontend (React/Amplify) → Lambda Function URLs
 ├── Profile Setup: Resume upload → S3 → AI parsing → DynamoDB
-├── Job Search: Chat queries → Orchestrator Agent → Specialized Agents
-└── Real-time Chat: WebSocket-style streaming responses
+├── Job Search: Chat queries → Agent Proxy Lambda → Bedrock AgentCore
+│   └── Agent Proxy bypasses Cognito session policies (allows unauthenticated access)
+├── Orchestrator Agent → Specialized Agents (Intent Recognition)
+└── Real-time Chat: Streaming responses via HTTP
 ```
 
 **2. AI Processing Pipeline**
@@ -113,6 +115,29 @@ Data Sources (S3 Buckets)
 - **Fit Analysis**: Comprehensive matching based on skills, experience, and career goals
 - **Source Attribution**: URL extraction and citation for career advice
 
+#### Authentication & Authorization Architecture
+
+**Unauthenticated Access Pattern**:
+
+The application uses a **Lambda Proxy Pattern** to enable unauthenticated user access to Bedrock AgentCore while maintaining security:
+
+```
+Frontend → Agent Proxy Lambda (Function URL) → Bedrock AgentCore
+└── Bypasses Cognito Identity session policy restrictions
+```
+
+**Why Lambda Proxy?**
+
+- **Cognito Identity Limitation**: AWS Cognito Identity applies restrictive session policies for unauthenticated users that block `bedrock-agentcore:InvokeAgentRuntime` actions
+- **Solution**: Lambda Function URL with proper IAM role permissions acts as a secure proxy
+- **Benefit**: Enables seamless guest user experience without requiring sign-up
+
+**Authentication Components**:
+
+- **Cognito Identity Pool**: Used for S3 resume upload (unauthenticated role with S3 write permissions)
+- **Agent Proxy Lambda**: IAM role with `bedrock-agentcore:InvokeAgentRuntime` permissions
+- **Function URLs**: Direct HTTP access points for Lambda functions (profile, resume, agent proxy)
+
 #### Security & Compliance
 
 **Data Protection**:
@@ -120,6 +145,7 @@ Data Sources (S3 Buckets)
 - **Encryption**: All data encrypted at rest (S3, DynamoDB) and in transit (HTTPS/TLS)
 - **Access Control**: IAM roles with least privilege principles
 - **Secret Management**: GitHub tokens stored in AWS Secrets Manager
+- **CORS Configuration**: Restricted to necessary origins and methods
 
 **Performance & Scalability**:
 

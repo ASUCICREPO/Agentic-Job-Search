@@ -1,8 +1,5 @@
-import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore';
-import { CognitoIdentityClient } from '@aws-sdk/client-cognito-identity';
-import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
 import { getUserEmail } from '../utils/cookieUtils';
-import { AWS_REGION, COGNITO_IDENTITY_POOL_ID, AGENT_RUNTIME_ARN, AGENT_QUALIFIER } from '../utils/constants';
+import { AGENT_PROXY_URL } from '../utils/constants';
 
 // Session management utility - generates new session ID on every page refresh
 const SESSION_STORAGE_KEY = 'agentic_job_search_session_id';
@@ -91,64 +88,60 @@ export async function invokeAgent(
   message: string,
   callbacks?: StreamingCallbacks
 ): Promise<void> {
-  try {
-    // Use Cognito Identity Pool for temporary credentials
-    const client = new BedrockAgentCoreClient({
-      region: AWS_REGION!,
-      credentials: fromCognitoIdentityPool({
-        client: new CognitoIdentityClient({ region: AWS_REGION! }),
-        identityPoolId: COGNITO_IDENTITY_POOL_ID!,
-      }),
-    });
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Use persistent session ID for consistency across interactions
+      const runtimeSessionId = getOrCreateSessionId();
 
-    // Use persistent session ID for consistency across interactions
-    const runtimeSessionId = getOrCreateSessionId();
+      // Get user email if available
+      const userEmail = getUserEmail();
 
-    console.log("using runtimeId" + runtimeSessionId)
+      const payload: any = {
+        prompt: message,
+        session_id: runtimeSessionId,
+        source: "livesearch"
+      };
 
-    // Get user email if available
-    const userEmail = getUserEmail();
+      // Include email if user has provided it
+      if (userEmail) {
+        payload.email = userEmail;
+      }
 
-    const payload: any = {
-      prompt: message,
-      session_id: runtimeSessionId,
-      source: "livesearch"
-    };
+      try {
+        const response = await fetch(AGENT_PROXY_URL!, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            runtimeSessionId: runtimeSessionId,
+            payload: payload
+          })
+        });
 
-    // Include email if user has provided it
-    if (userEmail) {
-      payload.email = userEmail;
-    }
-
-    const input = {
-      runtimeSessionId: runtimeSessionId,
-      agentRuntimeArn: AGENT_RUNTIME_ARN!,
-      qualifier: AGENT_QUALIFIER,
-      payload: new TextEncoder().encode(JSON.stringify(payload)),
-    };
-
-    const command = new InvokeAgentRuntimeCommand(input);
-    const response = await client.send(command);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
         // Handle streaming response
-        if (response.response) {
-          try {
-            // Process the streaming response incrementally
-            let buffer = '';
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('Response body is not readable');
+        }
 
-        // Use the streaming response body
-        const stream = response.response.transformToWebStream();
-        const reader = stream.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
 
         try {
           while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
 
-            // Decode the chunk and add to buffer
-            const chunk = decoder.decode(value, { stream: true });
-            buffer += chunk;
+            if (done) {
+              break;
+            }
+
+            // Decode the chunk and append to buffer
+            buffer += decoder.decode(value, { stream: true });
 
             // Process complete lines from the buffer
             const lines = buffer.split('\n');
@@ -166,16 +159,19 @@ export async function invokeAgent(
 
                   // Handle job search started
                   if (data.job_search_started === true && callbacks?.onJobSearchStarted) {
+                    console.log('Job search started event received');
                     callbacks.onJobSearchStarted();
                   }
 
                   // Handle career advice started
                   if (data.carrier_advice_started === true && callbacks?.onCareerAdviceStarted) {
+                    console.log('Career advice started event received');
                     callbacks.onCareerAdviceStarted();
                   }
 
                   // Handle job results
                   if (data.job_agent_result && callbacks?.onJobResults) {
+                    console.log('Job agent result event received, processing...');
                     try {
                       let jobData: any[] = [];
                       let cleanJobResult = data.job_agent_result.trim();
@@ -188,7 +184,9 @@ export async function invokeAgent(
 
                       jobData = JSON.parse(cleanJobResult);
                       console.log('Job search results from backend:', JSON.stringify(jobData, null, 2));
+                      console.log('Calling onJobResults callback with', jobData.length, 'jobs');
                       callbacks.onJobResults(jobData, data.response || "Here are your job recommendations:");
+                      console.log('onJobResults callback completed');
                     } catch (error) {
                       console.error('Error parsing job data:', error);
                       if (callbacks?.onError) {
@@ -209,6 +207,7 @@ export async function invokeAgent(
 
                   // Handle sources
                   if (data.sources && callbacks?.onSources) {
+                    console.log('Sources received:', data.sources.length, 'sources');
                     callbacks.onSources(data.sources);
                   }
 
@@ -222,6 +221,7 @@ export async function invokeAgent(
 
                   // Handle errors
                   if (data.error && callbacks?.onError) {
+                    console.log('Error event received:', data.error);
                     callbacks.onError(data.error);
                   }
 
@@ -231,20 +231,34 @@ export async function invokeAgent(
               }
             }
           }
+
+          // Process any remaining content in buffer
+          if (buffer.trim()) {
+            if (callbacks?.onFinalResult) {
+              callbacks.onFinalResult(buffer.trim());
+            }
+          }
+
+          resolve();
+
         } finally {
           reader.releaseLock();
         }
-      } catch (error) {
-        console.error('Error processing streaming response:', error);
+
+      } catch (fetchError) {
+        console.error('Fetch error:', fetchError);
         if (callbacks?.onError) {
-          callbacks.onError('Error processing streaming response');
+          callbacks.onError('Network error. Please check your connection and try again.');
         }
+        reject(fetchError);
       }
+
+    } catch (error) {
+      console.error('Agent invocation failed:', error);
+      if (callbacks?.onError) {
+        callbacks.onError('I apologize, but I\'m having trouble connecting to the agent service right now. Please try again later.');
+      }
+      reject(error);
     }
-  } catch (error) {
-    console.error('Agent invocation failed:', error);
-    if (callbacks?.onError) {
-      callbacks.onError('I apologize, but I\'m having trouble connecting to the agent service right now. Please try again later.');
-    }
-  }
+  });
 }
