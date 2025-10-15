@@ -428,6 +428,8 @@ const ChatBotPage: React.FC = () => {
                 },
 
                 onJobResults: (jobs: Job[], responseText: string) => {
+                    console.log('ChatBotPage - onJobResults called with', jobs.length, 'jobs');
+                    
                     setIsTyping(false);
                     hasJobResults = true;
                     waitingForJobResult = false;
@@ -443,19 +445,36 @@ const ChatBotPage: React.FC = () => {
                     }
 
                     if (jobs && jobs.length > 0) {
+                        // Use orchestratorMessageId if streamingMessageId isn't set yet
+                        const targetMessageId = streamingMessageId || orchestratorMessageId;
+                        console.log('ChatBotPage - Using targetMessageId:', targetMessageId);
+                        
                         // Update the orchestrator message with job results
-                        if (streamingMessageId) {
-                            setMessages(prev =>
-                                prev.map(msg =>
-                                    msg.id === streamingMessageId
+                        if (targetMessageId) {
+                            setMessages(prev => {
+                                const updated = prev.map(msg =>
+                                    msg.id === targetMessageId
                                         ? {
                                             ...msg,
                                             jobs: jobs,
                                             isStreaming: false
                                         }
                                         : msg
-                                )
-                            );
+                                );
+                                return updated;
+                            });
+                        } else {
+                            console.log('ChatBotPage - No targetMessageId, creating new message');
+                            // Fallback: create a new message if no ID is available
+                            const jobMessage: Message = {
+                                id: Date.now() + Math.random(),
+                                text: responseText,
+                                isUser: false,
+                                timestamp: new Date(),
+                                jobs: jobs,
+                                isStreaming: false
+                            };
+                            setMessages(prev => [...prev, jobMessage]);
                         }
                     }
                 },
