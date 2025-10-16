@@ -5,7 +5,6 @@
   "dependencies": {
     "@aws-amplify/cli": "^14.0.0",
     "@aws-sdk/client-bedrock-agent-runtime": "^3.888.0",
-    "@aws-sdk/client-bedrock-agentcore": "^3.888.0",
     "@aws-sdk/client-cognito-identity": "^3.910.0",
     "@aws-sdk/client-s3": "^3.884.0",
     "@aws-sdk/credential-provider-cognito-identity": "^3.910.0",
