@@ -204,10 +204,6 @@ const JobDescription = styled.p`
   line-height: 1.5;
   margin: 8px 0;
   font-size: 0.9rem;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 
   @media (max-width: 480px) {
     margin: 10px 0;
