@@ -3,7 +3,14 @@
 A comprehensive chatbot application that provides intelligent job search and career guidance for students, powered by AWS Bedrock AgentCore and cutting-edge AI technologies.
 
 ## Demo Video
-*[Demo video link will be added here]*
+
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=4EIM9nCceco">
+    <img src="https://img.youtube.com/vi/4EIM9nCceco/maxresdefault.jpg" alt="AI-Powered Job Search Assistant Demo" style="width:80%; max-width:800px;">
+  </a>
+  <br>
+  <em>Click the image above to watch the demo video</em>
+</div>
 
 ## Index
 
