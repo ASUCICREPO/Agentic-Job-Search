@@ -78,15 +78,14 @@ export class jobsearch1 extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       cors: [
         {
-          allowedHeaders: ["*"],
+          allowedHeaders: ["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
           allowedMethods: [
             s3.HttpMethods.GET,
             s3.HttpMethods.HEAD,
             s3.HttpMethods.PUT,
             s3.HttpMethods.POST,
-            s3.HttpMethods.DELETE,
           ],
-          allowedOrigins: ["*"],
+          allowedOrigins: ["https://localhost:3000", "https://*.amplifyapp.com"],
           exposedHeaders: [],
         },
       ],
@@ -103,15 +102,14 @@ export class jobsearch1 extends cdk.Stack {
       }),
       cors: [
         {
-          allowedHeaders: ["*"],
+          allowedHeaders: ["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
           allowedMethods: [
             s3.HttpMethods.GET,
             s3.HttpMethods.HEAD,
             s3.HttpMethods.PUT,
             s3.HttpMethods.POST,
-            s3.HttpMethods.DELETE,
           ],
-          allowedOrigins: ["*"],
+          allowedOrigins: ["https://localhost:3000", "https://*.amplifyapp.com"],
           exposedHeaders: [],
         },
       ],
@@ -176,8 +174,8 @@ export class jobsearch1 extends cdk.Stack {
         dataTraceEnabled: false,
       },
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowOrigins: ['https://localhost:3000', 'https://*.amplifyapp.com'],
+        allowMethods: ['GET', 'POST', 'OPTIONS'],
         allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
       },
     });
@@ -217,8 +215,8 @@ export class jobsearch1 extends cdk.Stack {
         integrationResponses: [{
           statusCode: '200',
           responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': "'*'",
-            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+            'method.response.header.Access-Control-Allow-Origin': "'https://*.amplifyapp.com'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
             'method.response.header.Access-Control-Allow-Methods': "'GET,OPTIONS'"
           },
           responseTemplates: {
@@ -234,8 +232,8 @@ export class jobsearch1 extends cdk.Stack {
           statusCode: '404',
           selectionPattern: '.*"__type":"com.amazon.coral.validate#ValidationException".*',
           responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': "'*'",
-            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+            'method.response.header.Access-Control-Allow-Origin': "'https://*.amplifyapp.com'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
             'method.response.header.Access-Control-Allow-Methods': "'GET,OPTIONS'"
           },
           responseTemplates: {
@@ -288,7 +286,7 @@ export class jobsearch1 extends cdk.Stack {
     const saveProfileUrl = saveProfile.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: ["https://localhost:3000", "https://*.amplifyapp.com"],
         allowedMethods: [lambda.HttpMethod.POST, lambda.HttpMethod.GET],
         allowedHeaders: ["Content-Type"],
       },
@@ -317,7 +315,7 @@ export class jobsearch1 extends cdk.Stack {
     const resumeProcessorUrl = resumeProcessorLambda.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: ["https://localhost:3000", "https://*.amplifyapp.com"],
         allowedMethods: [lambda.HttpMethod.POST],
         allowedHeaders: ["Content-Type"],
       },
@@ -326,12 +324,14 @@ export class jobsearch1 extends cdk.Stack {
     // Grant Lambda permissions to access the ResumeBucket
     ResumeBucket.grantRead(resumeProcessorLambda);
 
-    // Grant Lambda permissions to invoke Bedrock models
+    // Grant Lambda permissions to invoke specific Bedrock models (Nova Pro for resume parsing)
     resumeProcessorLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock:InvokeModel"],
-        resources: ["*"], // You can restrict to specific model ARNs if needed
+        resources: [
+          `arn:aws:bedrock:${aws_region}::foundation-model/us.amazon.nova-pro-v1:0`
+        ],
       })
     );
 
@@ -361,7 +361,10 @@ export class jobsearch1 extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock-agentcore:InvokeAgentRuntime"],
-        resources: ["*"],
+        resources: [
+          `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agents/*`,
+          `arn:aws:bedrock:${aws_region}::foundation-model/global.anthropic.claude-sonnet-4-5-20250929-v1:0`
+        ],
       })
     );
 
@@ -370,7 +373,7 @@ export class jobsearch1 extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: ["https://localhost:3000", "https://*.amplifyapp.com"],
         allowedMethods: [lambda.HttpMethod.POST],
         allowedHeaders: ["Content-Type"],
       },
@@ -471,7 +474,10 @@ export class jobsearch1 extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock-agentcore:InvokeAgentRuntime"],
-        resources: ["*"],
+        resources: [
+          `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agents/*`,
+          `arn:aws:bedrock:${aws_region}::foundation-model/global.anthropic.claude-sonnet-4-5-20250929-v1:0`
+        ],
       })
     );
 
@@ -514,7 +520,9 @@ export class jobsearch1 extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["ses:SendEmail", "ses:SendRawEmail"],
-        resources: ["*"],
+        resources: [
+          `arn:aws:ses:${aws_region}:${this.account}:identity/${senderEmail}`
+        ],
       })
     );
 
@@ -554,28 +562,93 @@ export class jobsearch1 extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
     });
 
-    // Attach managed policies
-    bedrockAgentCoreExecutionRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonBedrockFullAccess")
-    );
-    bedrockAgentCoreExecutionRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonDynamoDBFullAccess_v2")
-    );
-    bedrockAgentCoreExecutionRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName("BedrockAgentCoreFullAccess")
-    );
-
-    // Add full access policies for logs, ECR, X-Ray, and CloudWatch
+    // Grant specific Bedrock permissions instead of full access
     bedrockAgentCoreExecutionRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:*",
-          "ecr:*",
-          "xray:*",
-          "cloudwatch:*",
+          "bedrock:InvokeModel",
+          "bedrock:GetFoundationModel",
+          "bedrock:ListFoundationModels"
         ],
-        resources: ["*"],
+        resources: [
+          `arn:aws:bedrock:${aws_region}::foundation-model/global.anthropic.claude-sonnet-4-5-20250929-v1:0`,
+          `arn:aws:bedrock:${aws_region}::foundation-model/amazon.titan-embed-text-v2:0`
+        ],
+      })
+    );
+
+    // Grant specific DynamoDB permissions instead of full access
+    StudentProfileTable.grantReadData(bedrockAgentCoreExecutionRole);
+    JobRecommendationsTable.grantReadWriteData(bedrockAgentCoreExecutionRole);
+
+    // Grant specific Bedrock Agent Core permissions
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "bedrock-agentcore:CreateAgent",
+          "bedrock-agentcore:UpdateAgent",
+          "bedrock-agentcore:GetAgent",
+          "bedrock-agentcore:InvokeAgentRuntime"
+        ],
+        resources: [
+          `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agents/*`
+        ],
+      })
+    );
+
+    // Add specific permissions for logs, ECR, X-Ray, and CloudWatch
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ],
+        resources: [
+          `arn:aws:logs:${aws_region}:${this.account}:log-group:/aws/lambda/*`,
+          `arn:aws:logs:${aws_region}:${this.account}:log-group:/aws/bedrock/*`
+        ],
+      })
+    );
+
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ],
+        resources: [
+          `arn:aws:ecr:${aws_region}:${this.account}:repository/*`
+        ],
+      })
+    );
+
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ],
+        resources: ["*"], // X-Ray requires wildcard for trace segments
+      })
+    );
+
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "cloudwatch:PutMetricData"
+        ],
+        resources: ["*"], // CloudWatch metrics require wildcard
       })
     );
 
