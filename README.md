@@ -4,13 +4,9 @@ A comprehensive chatbot application that provides intelligent job search and car
 
 ## Demo Video
 
-<div align="center">
-  <a href="https://www.youtube.com/watch?v=4EIM9nCceco">
-    <img src="https://img.youtube.com/vi/4EIM9nCceco/maxresdefault.jpg" alt="AI-Powered Job Search Assistant Demo" style="width:80%; max-width:800px;">
-  </a>
-  <br>
-  <em>Click the image above to watch the demo video</em>
-</div>
+<video src="docs/demo.mp4" controls style="max-width: 100%;"></video>
+
+**Watch on YouTube:** https://www.youtube.com/watch?v=4EIM9nCceco
 
 ## Index
 
@@ -43,7 +39,7 @@ This application combines natural language processing capabilities with intellig
 
 ## Architecture Diagram
 
-![Job Search Architecture Diagram](docs/JOB%20SEARCH%20ARCHITECTURE%20DIAGRAM.png)
+![Job Search Architecture Diagram](docs/architecture.png)
 
 The application implements a serverless, event-driven architecture with a multi-agent AI system at its core, combining real-time user interactions with automated batch processing for job matching.
 
