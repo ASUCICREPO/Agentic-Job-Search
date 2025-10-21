@@ -4,9 +4,9 @@ A comprehensive chatbot application that provides intelligent job search and car
 
 ## Demo Video
 
-[![Watch the demo video](docs/demo-thumbnail.jpg)](docs/demo.mp4)
-
-**Alternative:** [Watch on YouTube](https://www.youtube.com/watch?v=4EIM9nCceco)
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=4EIM9nCceco"><img src="https://markdown-videos-api.jorgenkh.no/youtube/4EIM9nCceco?width=640&height=360&filetype=jpeg" /></a>
+</p>
 
 ## Index
 
