@@ -63,6 +63,64 @@ export class jobsearch1 extends cdk.Stack {
       }
     );
 
+    // Create Amplify app early for CORS configuration
+    const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
+      sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
+        owner: githubOwner,
+        repository: githubRepo,
+        oauthToken: githubToken_secret_manager.secretValue,
+      }),
+      buildSpec: cdk.aws_codebuild.BuildSpec.fromObjectToYaml({
+        version: "1.0",
+        frontend: {
+          phases: {
+            preBuild: {
+              commands: ["cd frontend", "npm ci"],
+            },
+            build: {
+              commands: ["npm run build"],
+            },
+          },
+          artifacts: {
+            baseDirectory: "frontend/build",
+            files: ["**/*"],
+          },
+          cache: {
+            paths: ["frontend/node_modules/**/*"],
+          },
+        },
+      }),
+      customRules: [
+        {
+          source:
+            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/job-options",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/chatbot",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/unsubscribe",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+      ],
+    });
+
+    // Create Amplify app URL constant for CORS
+    const amplifyAppUrl = amplifyApp.appId
+      ? `https://main.${amplifyApp.appId}.amplifyapp.com`
+      : "*";
+    console.log(`Frontend URL for CORS: ${amplifyAppUrl}`);
+
     // Create SES Email Identity
     const senderIdentity = new ses.EmailIdentity(this, "SenderIdentity", {
       identity: ses.Identity.email(senderEmail),
@@ -86,7 +144,7 @@ export class jobsearch1 extends cdk.Stack {
             s3.HttpMethods.POST,
             s3.HttpMethods.DELETE,
           ],
-          allowedOrigins: ["*"],
+          allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
           exposedHeaders: [],
         },
       ],
@@ -111,7 +169,7 @@ export class jobsearch1 extends cdk.Stack {
             s3.HttpMethods.POST,
             s3.HttpMethods.DELETE,
           ],
-          allowedOrigins: ["*"],
+          allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
           exposedHeaders: [],
         },
       ],
@@ -288,7 +346,7 @@ export class jobsearch1 extends cdk.Stack {
     const saveProfileUrl = saveProfile.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
         allowedMethods: [lambda.HttpMethod.POST, lambda.HttpMethod.GET],
         allowedHeaders: ["Content-Type"],
       },
@@ -317,7 +375,7 @@ export class jobsearch1 extends cdk.Stack {
     const resumeProcessorUrl = resumeProcessorLambda.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
         allowedMethods: [lambda.HttpMethod.POST],
         allowedHeaders: ["Content-Type"],
       },
@@ -350,7 +408,7 @@ export class jobsearch1 extends cdk.Stack {
         path.join(__dirname, "..", "lambda", "agent-proxy")
       ),
       environment: {
-        AGENT_RUNTIME_ARN: "MANUALLY_ADD_HERE", // Will be updated after agent deployment
+        AGENT_RUNTIME_ARN: "",
         AGENT_QUALIFIER: "DEFAULT",
       },
       architecture: lambdaArchitecture,
@@ -370,7 +428,7 @@ export class jobsearch1 extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
         allowedMethods: [lambda.HttpMethod.POST],
         allowedHeaders: ["Content-Type"],
       },
@@ -461,7 +519,7 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(15),
       architecture: lambdaArchitecture,
       environment: {
-        BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY_ADD_HERE", // One manual step to be done later
+        BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY ADD HERE", // One manual step to be done later
         BEDROCK_AGENTCORE_QUALIFIER: "DEFAULT",
       },
     });
@@ -612,64 +670,10 @@ export class jobsearch1 extends cdk.Stack {
       },
     });
 
-    const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
-      sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
-        owner: githubOwner,
-        repository: githubRepo,
-        oauthToken: githubToken_secret_manager.secretValue,
-      }),
-      buildSpec: cdk.aws_codebuild.BuildSpec.fromObjectToYaml({
-        version: "1.0",
-        frontend: {
-          phases: {
-            preBuild: {
-              commands: ["cd frontend", "npm ci"],
-            },
-            build: {
-              commands: ["npm run build"],
-            },
-          },
-          artifacts: {
-            baseDirectory: "frontend/build",
-            files: ["**/*"],
-          },
-          cache: {
-            paths: ["frontend/node_modules/**/*"],
-          },
-        },
-      }),
-      customRules: [
-        {
-          source:
-            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/job-options",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/chatbot",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/unsubscribe",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-      ],
-    });
-
     const mainBranch = amplifyApp.addBranch("main", {
       autoBuild: true,
       stage: "PRODUCTION",
     });
-
-    // Create Amplify app URL constant (branch-specific URL)
-    const amplifyAppUrl = `https://${mainBranch.branchName}.${amplifyApp.defaultDomain}`;
 
     // Add AMPLIFY_APP_URL to notification sender Lambda using the branch-specific URL
     notificationSenderLambda.addEnvironment('AMPLIFY_APP_URL', amplifyAppUrl);
