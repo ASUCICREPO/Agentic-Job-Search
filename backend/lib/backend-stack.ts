@@ -645,20 +645,6 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    // Add specific Bedrock AgentCore permissions
-    bedrockAgentCoreExecutionRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "bedrock-agentcore:InvokeAgentRuntime",
-          "bedrock-agentcore:GetAgent",
-          "bedrock-agentcore:ListAgents"
-        ],
-        resources: [
-          `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:runtime/*`
-        ],
-      })
-    );
 
     // Add knowledge base permissions
     bedrockAgentCoreExecutionRole.addToPolicy(
