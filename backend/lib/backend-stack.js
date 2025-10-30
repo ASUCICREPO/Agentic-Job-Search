@@ -350,11 +350,13 @@ class jobsearch1 extends cdk.Stack {
         });
         // Grant Lambda permissions to access the ResumeBucket
         ResumeBucket.grantRead(resumeProcessorLambda);
-        // Grant Lambda permissions to invoke Bedrock models
+        // Grant Lambda permissions to invoke specific Bedrock models
         resumeProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
-            actions: ["bedrock:InvokeModel"],
-            resources: ["*"], // You can restrict to specific model ARNs if needed
+            actions: ["bedrock:InvokeModel", "bedrock:Converse"],
+            resources: [
+                `arn:aws:bedrock:${aws_region}::foundation-model/us.amazon.nova-pro-v1:0`
+            ],
         }));
         // Grant resume parser permission to invoke save profile Lambda
         saveProfile.grantInvoke(resumeProcessorLambda);
@@ -376,7 +378,10 @@ class jobsearch1 extends cdk.Stack {
         agentProxyLambda.addToRolePolicy(new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             actions: ["bedrock-agentcore:InvokeAgentRuntime"],
-            resources: ["*"],
+            resources: [
+                `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agent/*`,
+                `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agent-runtime/*`
+            ],
         }));
         // Add Function URL for direct frontend access
         const agentProxyUrl = agentProxyLambda.addFunctionUrl({
@@ -443,7 +448,7 @@ class jobsearch1 extends cdk.Stack {
             timeout: cdk.Duration.minutes(15),
             architecture: lambdaArchitecture,
             environment: {
-                BEDROCK_AGENTCORE_RUNTIME_ARN: "arn:aws:bedrock-agentcore:us-west-2:216989103356:runtime/JOBSEARCHAGENT-LWmC1147BA", // One manual step to be done later
+                BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY ADD HERE", // One manual step to be done later
                 BEDROCK_AGENTCORE_QUALIFIER: "DEFAULT",
             },
         });
@@ -451,7 +456,10 @@ class jobsearch1 extends cdk.Stack {
         sqsProcessorLambda.addToRolePolicy(new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             actions: ["bedrock-agentcore:InvokeAgentRuntime"],
-            resources: ["*"],
+            resources: [
+                `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agent/*`,
+                `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agent-runtime/*`
+            ],
         }));
         // Configure SQS as event source for the processor lambda
         sqsProcessorLambda.addEventSource(new aws_lambda_event_sources_1.SqsEventSource(jobNotificationQueue, {
@@ -479,21 +487,21 @@ class jobsearch1 extends cdk.Stack {
         notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             actions: ["ses:SendEmail", "ses:SendRawEmail"],
-            resources: ["*"],
+            resources: [
+                `arn:aws:ses:${aws_region}:${this.account}:identity/${senderEmail}`,
+                `arn:aws:ses:${aws_region}:${this.account}:configuration-set/*`
+            ],
         }));
         // Grant SMS Voice v2 permissions
         notificationSenderLambda.addToRolePolicy(new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             actions: [
-                "sms-voice:SendTextMessage",
-                "sms-voice:SendVoiceMessage",
-                "sms-voice:DescribeConfigurationSets",
-                "sms-voice:DescribePools",
-                "sms-voice:ListPools",
-                "sms-voice:DescribePhoneNumbers",
-                "sms-voice:ListPoolOriginationIdentities"
+                "sms-voice:SendTextMessage"
             ],
-            resources: ["*"],
+            resources: [
+                `arn:aws:sms-voice:${aws_region}:${this.account}:phone-number/${senderNumber.replace('+', '')}`,
+                `arn:aws:sms-voice:${aws_region}:${this.account}:pool/*`
+            ],
         }));
         // EventBridge rule to trigger notification sender at 9 AM daily
         const dailyNotificationRule = new events.Rule(this, "DailyNotificationRule", {
@@ -506,20 +514,122 @@ class jobsearch1 extends cdk.Stack {
             roleName: "BedrockAgentCoreExecutionRole",
             assumedBy: new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
         });
-        // Attach managed policies
-        bedrockAgentCoreExecutionRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonBedrockFullAccess"));
-        bedrockAgentCoreExecutionRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonDynamoDBFullAccess_v2"));
-        bedrockAgentCoreExecutionRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("BedrockAgentCoreFullAccess"));
-        // Add full access policies for logs, ECR, X-Ray, and CloudWatch
+        // Add specific Bedrock permissions instead of full access
         bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             actions: [
-                "logs:*",
-                "ecr:*",
-                "xray:*",
-                "cloudwatch:*",
+                "bedrock:InvokeModel",
+                "bedrock:Converse",
+                "bedrock:GetFoundationModel",
+                "bedrock:ListFoundationModels"
+            ],
+            resources: [
+                `arn:aws:bedrock:${aws_region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
+                `arn:aws:bedrock:${aws_region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
+                `arn:aws:bedrock:${aws_region}::foundation-model/amazon.titan-embed-text-v2:0`,
+                `arn:aws:bedrock:${aws_region}::foundation-model/us.amazon.nova-pro-v1:0`
+            ],
+        }));
+        // Add specific DynamoDB permissions instead of full access
+        bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteItem",
+                "dynamodb:Query",
+                "dynamodb:Scan"
+            ],
+            resources: [
+                StudentProfileTable.tableArn,
+                JobRecommendationsTable.tableArn,
+                `${StudentProfileTable.tableArn}/index/*`,
+                `${JobRecommendationsTable.tableArn}/index/*`
+            ],
+        }));
+        // Add specific Bedrock AgentCore permissions
+        bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+                "bedrock-agentcore:InvokeAgentRuntime",
+                "bedrock-agentcore:GetAgent",
+                "bedrock-agentcore:ListAgents"
+            ],
+            resources: [
+                `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agent/*`,
+                `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:agent-runtime/*`
+            ],
+        }));
+        // Add knowledge base permissions
+        bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+                "bedrock:Retrieve",
+                "bedrock:RetrieveAndGenerate"
+            ],
+            resources: [
+                `arn:aws:bedrock:${aws_region}:${this.account}:knowledge-base/${kb.knowledgeBaseId}`
+            ],
+        }));
+        // Add S3 permissions for knowledge base
+        bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+                "s3:GetObject",
+                "s3:ListBucket"
+            ],
+            resources: [
+                JobsBucket.bucketArn,
+                `${JobsBucket.bucketArn}/*`
+            ],
+        }));
+        // Add specific permissions for logs, ECR, X-Ray, and CloudWatch
+        bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams"
+            ],
+            resources: [
+                `arn:aws:logs:${aws_region}:${this.account}:log-group:/aws/bedrock/*`,
+                `arn:aws:logs:${aws_region}:${this.account}:log-group:/aws/lambda/*`
+            ],
+        }));
+        bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage"
+            ],
+            resources: [
+                `arn:aws:ecr:${aws_region}:${this.account}:repository/*`
+            ],
+        }));
+        bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+                "xray:PutTraceSegments",
+                "xray:PutTelemetryRecords"
             ],
             resources: ["*"],
+        }));
+        bedrockAgentCoreExecutionRole.addToPolicy(new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+                "cloudwatch:PutMetricData"
+            ],
+            resources: ["*"],
+            conditions: {
+                StringEquals: {
+                    "cloudwatch:namespace": "AWS/Bedrock"
+                }
+            }
         }));
         // Create Cognito Identity Pool for unauthenticated (guest) access
         const identityPool = new cognito.CfnIdentityPool(this, "JobSearchIdentityPool", {
@@ -587,7 +697,7 @@ class jobsearch1 extends cdk.Stack {
         });
         // Add environment variables to Amplify branch
         mainBranch.addEnvironment('REACT_APP_AGENT_QUALIFIER', 'DEFAULT');
-        mainBranch.addEnvironment('REACT_APP_AGENT_RUNTIME_ARN', 'MANUALLY ADD HERE');
+        mainBranch.addEnvironment('REACT_APP_AGENT_RUNTIME_ARN', 's ADD HERE');
         mainBranch.addEnvironment('REACT_APP_AWS_REGION', aws_region);
         mainBranch.addEnvironment('REACT_APP_AGENT_PROXY_URL', agentProxyUrl.url);
         mainBranch.addEnvironment('REACT_APP_RESUME_PROCESSOR_URL', resumeProcessorUrl.url);
