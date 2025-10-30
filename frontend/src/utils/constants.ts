@@ -7,10 +7,6 @@
 export const AWS_REGION = process.env.REACT_APP_AWS_REGION;
 export const COGNITO_IDENTITY_POOL_ID = process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID;
 
-// Agent Configuration
-export const AGENT_RUNTIME_ARN = process.env.REACT_APP_AGENT_RUNTIME_ARN;
-export const AGENT_QUALIFIER = process.env.REACT_APP_AGENT_QUALIFIER || 'DEFAULT';
-
 // S3 Configuration
 export const RESUME_BUCKET = process.env.REACT_APP_RESUME_BUCKET;
 

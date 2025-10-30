@@ -115,9 +115,14 @@ export class jobsearch1 extends cdk.Stack {
       ],
     });
 
+    const mainBranch = amplifyApp.addBranch("main", {
+      autoBuild: true,
+      stage: "PRODUCTION",
+    });
+
     // Create Amplify app URL constant for CORS
     const amplifyAppUrl = amplifyApp.appId
-      ? `https://main.${amplifyApp.appId}.amplifyapp.com`
+      ? `https://${mainBranch.branchName}.${amplifyApp.appId}.amplifyapp.com`
       : "*";
     console.log(`Frontend URL for CORS: ${amplifyAppUrl}`);
 
@@ -660,21 +665,6 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    // Add S3 permissions for knowledge base
-    bedrockAgentCoreExecutionRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "s3:GetObject",
-          "s3:ListBucket"
-        ],
-        resources: [
-          JobsBucket.bucketArn,
-          `${JobsBucket.bucketArn}/*`
-        ],
-      })
-    );
-
     // Add full access policies for logs, ECR, X-Ray, and CloudWatch
     bedrockAgentCoreExecutionRole.addToPolicy(
       new iam.PolicyStatement({
@@ -722,11 +712,6 @@ export class jobsearch1 extends cdk.Stack {
       },
     });
 
-    const mainBranch = amplifyApp.addBranch("main", {
-      autoBuild: true,
-      stage: "PRODUCTION",
-    });
-
     // Add AMPLIFY_APP_URL to notification sender Lambda using the branch-specific URL
     notificationSenderLambda.addEnvironment('AMPLIFY_APP_URL', amplifyAppUrl);
 
@@ -770,8 +755,6 @@ export class jobsearch1 extends cdk.Stack {
     });
 
     // Add environment variables to Amplify branch
-    mainBranch.addEnvironment('REACT_APP_AGENT_QUALIFIER', 'DEFAULT');
-    mainBranch.addEnvironment('REACT_APP_AGENT_RUNTIME_ARN', 's ADD HERE');
     mainBranch.addEnvironment('REACT_APP_AWS_REGION', aws_region);
     mainBranch.addEnvironment('REACT_APP_AGENT_PROXY_URL', agentProxyUrl.url);
     mainBranch.addEnvironment('REACT_APP_RESUME_PROCESSOR_URL', resumeProcessorUrl.url);
