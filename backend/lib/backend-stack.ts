@@ -63,6 +63,64 @@ export class jobsearch1 extends cdk.Stack {
       }
     );
 
+    // Create Amplify app early for CORS configuration
+    const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
+      sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
+        owner: githubOwner,
+        repository: githubRepo,
+        oauthToken: githubToken_secret_manager.secretValue,
+      }),
+      buildSpec: cdk.aws_codebuild.BuildSpec.fromObjectToYaml({
+        version: "1.0",
+        frontend: {
+          phases: {
+            preBuild: {
+              commands: ["cd frontend", "npm ci"],
+            },
+            build: {
+              commands: ["npm run build"],
+            },
+          },
+          artifacts: {
+            baseDirectory: "frontend/build",
+            files: ["**/*"],
+          },
+          cache: {
+            paths: ["frontend/node_modules/**/*"],
+          },
+        },
+      }),
+      customRules: [
+        {
+          source:
+            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/job-options",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/chatbot",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+        {
+          source: "/unsubscribe",
+          target: "/index.html",
+          status: amplify.RedirectStatus.REWRITE,
+        },
+      ],
+    });
+
+    // Create Amplify app URL constant for CORS
+    const amplifyAppUrl = amplifyApp.appId
+      ? `https://main.${amplifyApp.appId}.amplifyapp.com`
+      : "*";
+    console.log(`Frontend URL for CORS: ${amplifyAppUrl}`);
+
     // Create SES Email Identity
     const senderIdentity = new ses.EmailIdentity(this, "SenderIdentity", {
       identity: ses.Identity.email(senderEmail),
@@ -86,7 +144,7 @@ export class jobsearch1 extends cdk.Stack {
             s3.HttpMethods.POST,
             s3.HttpMethods.DELETE,
           ],
-          allowedOrigins: ["*"],
+          allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
           exposedHeaders: [],
         },
       ],
@@ -111,7 +169,7 @@ export class jobsearch1 extends cdk.Stack {
             s3.HttpMethods.POST,
             s3.HttpMethods.DELETE,
           ],
-          allowedOrigins: ["*"],
+          allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
           exposedHeaders: [],
         },
       ],
@@ -288,7 +346,7 @@ export class jobsearch1 extends cdk.Stack {
     const saveProfileUrl = saveProfile.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
         allowedMethods: [lambda.HttpMethod.POST, lambda.HttpMethod.GET],
         allowedHeaders: ["Content-Type"],
       },
@@ -317,7 +375,7 @@ export class jobsearch1 extends cdk.Stack {
     const resumeProcessorUrl = resumeProcessorLambda.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
         allowedMethods: [lambda.HttpMethod.POST],
         allowedHeaders: ["Content-Type"],
       },
@@ -326,12 +384,14 @@ export class jobsearch1 extends cdk.Stack {
     // Grant Lambda permissions to access the ResumeBucket
     ResumeBucket.grantRead(resumeProcessorLambda);
 
-    // Grant Lambda permissions to invoke Bedrock models
+    // Grant Lambda permissions to invoke specific Bedrock models
     resumeProcessorLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ["bedrock:InvokeModel"],
-        resources: ["*"], // You can restrict to specific model ARNs if needed
+        actions: ["bedrock:InvokeModel", "bedrock:Converse"],
+        resources: [
+          `arn:aws:bedrock:${aws_region}::foundation-model/us.amazon.nova-pro-v1:0`
+        ],
       })
     );
 
@@ -350,7 +410,7 @@ export class jobsearch1 extends cdk.Stack {
         path.join(__dirname, "..", "lambda", "agent-proxy")
       ),
       environment: {
-        AGENT_RUNTIME_ARN: "MANUALLY_ADD_HERE", // Will be updated after agent deployment
+        AGENT_RUNTIME_ARN: "",
         AGENT_QUALIFIER: "DEFAULT",
       },
       architecture: lambdaArchitecture,
@@ -361,7 +421,9 @@ export class jobsearch1 extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock-agentcore:InvokeAgentRuntime"],
-        resources: ["*"],
+        resources: [
+          `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:runtime/*`
+        ],
       })
     );
 
@@ -370,7 +432,7 @@ export class jobsearch1 extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
       cors: {
-        allowedOrigins: ["*"],
+        allowedOrigins: [amplifyAppUrl, "http://localhost:3000"],
         allowedMethods: [lambda.HttpMethod.POST],
         allowedHeaders: ["Content-Type"],
       },
@@ -388,10 +450,7 @@ export class jobsearch1 extends cdk.Stack {
       "JobSearchAgentImage",
       {
         directory: path.join(__dirname, "..", "JobSearchAgent"),
-        platform:
-          lambdaArchitecture === lambda.Architecture.ARM_64
-            ? ecrAssets.Platform.LINUX_ARM64
-            : ecrAssets.Platform.LINUX_AMD64,
+        platform: ecrAssets.Platform.LINUX_ARM64,
       }
     );
 
@@ -461,7 +520,7 @@ export class jobsearch1 extends cdk.Stack {
       timeout: cdk.Duration.minutes(15),
       architecture: lambdaArchitecture,
       environment: {
-        BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY_ADD_HERE", // One manual step to be done later
+        BEDROCK_AGENTCORE_RUNTIME_ARN: "MANUALLY ADD HERE", // One manual step to be done later
         BEDROCK_AGENTCORE_QUALIFIER: "DEFAULT",
       },
     });
@@ -471,7 +530,9 @@ export class jobsearch1 extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock-agentcore:InvokeAgentRuntime"],
-        resources: ["*"],
+        resources: [
+          `arn:aws:bedrock-agentcore:${aws_region}:${this.account}:runtime/*`
+        ],
       })
     );
 
@@ -514,7 +575,10 @@ export class jobsearch1 extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["ses:SendEmail", "ses:SendRawEmail"],
-        resources: ["*"],
+        resources: [
+          `arn:aws:ses:${aws_region}:${this.account}:identity/${senderEmail}`,
+          `arn:aws:ses:${aws_region}:${this.account}:configuration-set/*`
+        ],
       })
     );
 
@@ -523,15 +587,12 @@ export class jobsearch1 extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "sms-voice:SendTextMessage",
-          "sms-voice:SendVoiceMessage",
-          "sms-voice:DescribeConfigurationSets",
-          "sms-voice:DescribePools",
-          "sms-voice:ListPools",
-          "sms-voice:DescribePhoneNumbers",
-          "sms-voice:ListPoolOriginationIdentities"
+          "sms-voice:SendTextMessage"
         ],
-        resources: ["*"],
+        resources: [
+          `arn:aws:sms-voice:${aws_region}:${this.account}:phone-number/${senderNumber.replace('+', '')}`,
+          `arn:aws:sms-voice:${aws_region}:${this.account}:pool/*`
+        ],
       })
     );
 
@@ -558,11 +619,60 @@ export class jobsearch1 extends cdk.Stack {
     bedrockAgentCoreExecutionRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonBedrockFullAccess")
     );
-    bedrockAgentCoreExecutionRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonDynamoDBFullAccess_v2")
-    );
+
     bedrockAgentCoreExecutionRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName("BedrockAgentCoreFullAccess")
+    );
+
+    // Add specific DynamoDB permissions instead of full access
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ],
+        resources: [
+          StudentProfileTable.tableArn,
+          JobRecommendationsTable.tableArn,
+          `${StudentProfileTable.tableArn}/index/*`,
+          `${JobRecommendationsTable.tableArn}/index/*`
+        ],
+      })
+    );
+
+
+    // Add knowledge base permissions
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "bedrock:Retrieve",
+          "bedrock:RetrieveAndGenerate"
+        ],
+        resources: [
+          `arn:aws:bedrock:${aws_region}:${this.account}:knowledge-base/${kb.knowledgeBaseId}`
+        ],
+      })
+    );
+
+    // Add S3 permissions for knowledge base
+    bedrockAgentCoreExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        resources: [
+          JobsBucket.bucketArn,
+          `${JobsBucket.bucketArn}/*`
+        ],
+      })
     );
 
     // Add full access policies for logs, ECR, X-Ray, and CloudWatch
@@ -573,7 +683,7 @@ export class jobsearch1 extends cdk.Stack {
           "logs:*",
           "ecr:*",
           "xray:*",
-          "cloudwatch:*",
+          "cloudwatch:*"
         ],
         resources: ["*"],
       })
@@ -612,64 +722,10 @@ export class jobsearch1 extends cdk.Stack {
       },
     });
 
-    const amplifyApp = new amplify.App(this, "AmplifyFrontendUI", {
-      sourceCodeProvider: new amplify.GitHubSourceCodeProvider({
-        owner: githubOwner,
-        repository: githubRepo,
-        oauthToken: githubToken_secret_manager.secretValue,
-      }),
-      buildSpec: cdk.aws_codebuild.BuildSpec.fromObjectToYaml({
-        version: "1.0",
-        frontend: {
-          phases: {
-            preBuild: {
-              commands: ["cd frontend", "npm ci"],
-            },
-            build: {
-              commands: ["npm run build"],
-            },
-          },
-          artifacts: {
-            baseDirectory: "frontend/build",
-            files: ["**/*"],
-          },
-          cache: {
-            paths: ["frontend/node_modules/**/*"],
-          },
-        },
-      }),
-      customRules: [
-        {
-          source:
-            "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/job-options",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/chatbot",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-        {
-          source: "/unsubscribe",
-          target: "/index.html",
-          status: amplify.RedirectStatus.REWRITE,
-        },
-      ],
-    });
-
     const mainBranch = amplifyApp.addBranch("main", {
       autoBuild: true,
       stage: "PRODUCTION",
     });
-
-    // Create Amplify app URL constant (branch-specific URL)
-    const amplifyAppUrl = `https://${mainBranch.branchName}.${amplifyApp.defaultDomain}`;
 
     // Add AMPLIFY_APP_URL to notification sender Lambda using the branch-specific URL
     notificationSenderLambda.addEnvironment('AMPLIFY_APP_URL', amplifyAppUrl);
@@ -715,7 +771,7 @@ export class jobsearch1 extends cdk.Stack {
 
     // Add environment variables to Amplify branch
     mainBranch.addEnvironment('REACT_APP_AGENT_QUALIFIER', 'DEFAULT');
-    mainBranch.addEnvironment('REACT_APP_AGENT_RUNTIME_ARN', 'MANUALLY ADD HERE');
+    mainBranch.addEnvironment('REACT_APP_AGENT_RUNTIME_ARN', 's ADD HERE');
     mainBranch.addEnvironment('REACT_APP_AWS_REGION', aws_region);
     mainBranch.addEnvironment('REACT_APP_AGENT_PROXY_URL', agentProxyUrl.url);
     mainBranch.addEnvironment('REACT_APP_RESUME_PROCESSOR_URL', resumeProcessorUrl.url);

@@ -21,7 +21,7 @@ exports.handler = awslambda.streamifyResponse(
             // Extract parameters
             const runtimeSessionId = body.runtimeSessionId;
             const payload = body.payload;
-
+            
             // Validation
             if (!runtimeSessionId || !payload) {
                 const errorMsg = JSON.stringify({
@@ -37,7 +37,6 @@ exports.handler = awslambda.streamifyResponse(
 
                 responseStream.write(errorMsg);
                 responseStream.end();
-                await responseStream.finished();
                 return;
             }
 
@@ -78,7 +77,6 @@ exports.handler = awslambda.streamifyResponse(
                 const errorMsg = JSON.stringify({ error: 'No response stream from AgentCore' });
                 responseStream.write(errorMsg);
                 responseStream.end();
-                await responseStream.finished();
                 return;
             }
 
@@ -99,7 +97,6 @@ exports.handler = awslambda.streamifyResponse(
 
             console.log("Direct streaming complete");
             responseStream.end();
-            await responseStream.finished();
 
         } catch (error) {
             console.error('Error in streaming response:', error);
@@ -116,7 +113,6 @@ exports.handler = awslambda.streamifyResponse(
 
             responseStream.write(errorMsg);
             responseStream.end();
-            await responseStream.finished();
         }
     }
 );
