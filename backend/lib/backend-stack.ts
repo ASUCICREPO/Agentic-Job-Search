@@ -122,7 +122,7 @@ export class jobsearch1 extends cdk.Stack {
 
     // Create Amplify app URL constant for CORS
     const amplifyAppUrl = amplifyApp.appId
-      ? `https://${mainBranch.branchName}.${amplifyApp.appId}.amplifyapp.com`
+      ? `https://main.${amplifyApp.appId}.amplifyapp.com`
       : "*";
     console.log(`Frontend URL for CORS: ${amplifyAppUrl}`);
 
