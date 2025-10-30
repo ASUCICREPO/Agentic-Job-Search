@@ -446,10 +446,7 @@ export class jobsearch1 extends cdk.Stack {
       "JobSearchAgentImage",
       {
         directory: path.join(__dirname, "..", "JobSearchAgent"),
-        platform:
-          lambdaArchitecture === lambda.Architecture.ARM_64
-            ? ecrAssets.Platform.LINUX_ARM64
-            : ecrAssets.Platform.LINUX_AMD64,
+        platform: ecrAssets.Platform.LINUX_ARM64,
       }
     );
 
