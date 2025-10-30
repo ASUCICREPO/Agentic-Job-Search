@@ -615,23 +615,13 @@ export class jobsearch1 extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
     });
 
-    // Add specific Bedrock permissions instead of full access
-    bedrockAgentCoreExecutionRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "bedrock:InvokeModel",
-          "bedrock:Converse",
-          "bedrock:GetFoundationModel",
-          "bedrock:ListFoundationModels"
-        ],
-        resources: [
-          `arn:aws:bedrock:${aws_region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
-          `arn:aws:bedrock:${aws_region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
-          `arn:aws:bedrock:${aws_region}::foundation-model/amazon.titan-embed-text-v2:0`,
-          `arn:aws:bedrock:${aws_region}::foundation-model/us.amazon.nova-pro-v1:0`
-        ],
-      })
+    // Attach managed policies
+    bedrockAgentCoreExecutionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonBedrockFullAccess")
+    );
+
+    bedrockAgentCoreExecutionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("BedrockAgentCoreFullAccess")
     );
 
     // Add specific DynamoDB permissions instead of full access
@@ -699,62 +689,17 @@ export class jobsearch1 extends cdk.Stack {
       })
     );
 
-    // Add specific permissions for logs, ECR, X-Ray, and CloudWatch
+    // Add full access policies for logs, ECR, X-Ray, and CloudWatch
     bedrockAgentCoreExecutionRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
-        ],
-        resources: [
-          `arn:aws:logs:${aws_region}:${this.account}:log-group:/aws/bedrock/*`,
-          `arn:aws:logs:${aws_region}:${this.account}:log-group:/aws/lambda/*`
-        ],
-      })
-    );
-
-    bedrockAgentCoreExecutionRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage"
-        ],
-        resources: [
-          `arn:aws:ecr:${aws_region}:${this.account}:repository/*`
-        ],
-      })
-    );
-
-    bedrockAgentCoreExecutionRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "xray:PutTraceSegments",
-          "xray:PutTelemetryRecords"
+          "logs:*",
+          "ecr:*",
+          "xray:*",
+          "cloudwatch:*"
         ],
         resources: ["*"],
-      })
-    );
-
-    bedrockAgentCoreExecutionRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "cloudwatch:PutMetricData"
-        ],
-        resources: ["*"],
-        conditions: {
-          StringEquals: {
-            "cloudwatch:namespace": "AWS/Bedrock"
-          }
-        }
       })
     );
 
