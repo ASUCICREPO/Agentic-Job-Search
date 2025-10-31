@@ -5,7 +5,7 @@
 This documentation describes the user journey through the AI-powered job search assistant, from initial profile setup through conversational job discovery and automated daily recommendations.
 
 ### Visual Flow Diagram
-![User Flow Diagram](user_flow.png)
+![User Flow Diagram](media/user_flow.png)
 
 ## Application Routes & User Journey
 

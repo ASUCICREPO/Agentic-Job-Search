@@ -39,7 +39,7 @@ This application combines natural language processing capabilities with intellig
 
 ## Architecture Diagram
 
-![Job Search Architecture Diagram](docs/architecture.png)
+![Job Search Architecture Diagram](docs/media/architecture.png)
 
 The application implements a serverless, event-driven architecture with a multi-agent AI system at its core, combining real-time user interactions with automated batch processing for job matching.
 
