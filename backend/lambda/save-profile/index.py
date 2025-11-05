@@ -4,77 +4,8 @@ import os
 from typing import Dict, Any
 from datetime import datetime, timezone
 
-# Comprehensive validation functions for DynamoDB security
-def validate_email(email: str) -> str:
-    """Validate email format and prevent injection"""
-    if not email or not isinstance(email, str):
-        raise ValueError("Email is required and must be a string")
-
-    # Strip whitespace first
-    email = email.strip()
-
-    # Basic email format validation
-    if '@' not in email or '.' not in email.split('@')[1]:
-        raise ValueError("Invalid email format")
-
-    # Length validation
-    if len(email) < 5 or len(email) > 254:
-        raise ValueError("Email length must be between 5 and 254 characters")
-
-    # Character whitelist
-    allowed_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-_+')
-    if not all(c in allowed_chars for c in email):
-        raise ValueError("Email contains invalid characters")
-
-    return email.lower()
-
-def validate_string(value: str, field_name: str, min_len: int = 0, max_len: int = 500) -> str:
-    """Validate and sanitize string fields"""
-    if not isinstance(value, str):
-        raise ValueError(f"{field_name} must be a string")
-
-    # Strip whitespace
-    value = value.strip()
-
-    # Length validation
-    if len(value) < min_len or len(value) > max_len:
-        raise ValueError(f"{field_name} must be between {min_len} and {max_len} characters")
-
-    # Remove potential XSS characters
-    value = value.replace('<', '').replace('>', '').replace('&lt;', '').replace('&gt;', '')
-
-    # Remove null bytes
-    value = value.replace('\x00', '')
-
-    return value
-
-def validate_boolean(value: any, field_name: str) -> bool:
-    """Validate boolean values"""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        if value.lower() in ['true', '1', 'yes']:
-            return True
-        if value.lower() in ['false', '0', 'no']:
-            return False
-    raise ValueError(f"{field_name} must be a boolean value")
-
-def validate_phone_number(phone: str) -> str:
-    """Validate phone number format"""
-    if not phone or not isinstance(phone, str):
-        return "N/A"
-
-    # Remove all non-digit characters
-    digits = ''.join(c for c in phone if c.isdigit())
-
-    # Must be 10 or 11 digits (with country code)
-    if len(digits) == 10:
-        return f"+1{digits}"
-    elif len(digits) == 11 and digits[0] == '1':
-        return f"+{digits}"
-    else:
-        return "N/A"
-
+# Import shared validation functions from the utility module
+from utils.validation import validate_email, validate_string, validate_boolean, validate_phone_number
 def sanitize_email_for_actor_id(email: str) -> str:
     """
     Sanitize email for use as DynamoDB actionID.
