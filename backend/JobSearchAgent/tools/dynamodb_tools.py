@@ -6,9 +6,110 @@ Contains functions for managing student profiles in DynamoDB.
 
 import os
 import boto3
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from pydantic import BaseModel, Field
 from strands import tool
+
+# Comprehensive validation functions for DynamoDB security
+def validate_email(email: str) -> str:
+    """Validate email format and prevent injection"""
+    if not email or not isinstance(email, str):
+        raise ValueError("Email is required and must be a string")
+    email = email.strip()
+    if '@' not in email or '.' not in email.split('@')[1]:
+        raise ValueError("Invalid email format")
+    if len(email) < 5 or len(email) > 254:
+        raise ValueError("Email length must be between 5 and 254 characters")
+    allowed_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-_+')
+    if not all(c in allowed_chars for c in email):
+        raise ValueError("Email contains invalid characters")
+    return email.lower()
+
+def validate_job_category(job_category: str) -> str:
+    """Validate job category format"""
+    if not job_category or not isinstance(job_category, str):
+        raise ValueError("Job category is required and must be a string")
+    # Remove special characters, keep alphanumeric and hyphens
+    sanitized = ''.join(c if c.isalnum() or c == '-' else '-' for c in job_category.lower())
+    # Remove consecutive hyphens
+    while '--' in sanitized:
+        sanitized = sanitized.replace('--', '-')
+    # Strip leading/trailing hyphens
+    sanitized = sanitized.strip('-')
+    # Length validation
+    if len(sanitized) < 2 or len(sanitized) > 100:
+        raise ValueError("Job category must be between 2 and 100 characters")
+    return sanitized
+
+def validate_job_information(job_info: list) -> list:
+    """Validate job information structure"""
+    if not isinstance(job_info, list):
+        raise ValueError("Job information must be a list")
+    if len(job_info) == 0:
+        raise ValueError("Job information cannot be empty")
+    if len(job_info) > 50:
+        raise ValueError("Too many job recommendations (max 50)")
+
+    validated_jobs = []
+    required_fields = ['id', 'title', 'company', 'description']
+
+    for job in job_info:
+        if not isinstance(job, dict):
+            continue
+        # Validate required fields exist
+        if not all(field in job for field in required_fields):
+            continue
+        # Validate and sanitize each field
+        validated_job = {
+            'id': validate_string(str(job.get('id', '')), 'id', 1, 100),
+            'title': validate_string(job.get('title', ''), 'title', 1, 200),
+            'description': validate_string(job.get('description', ''), 'description', 0, 5000),
+            'company': validate_string(job.get('company', ''), 'company', 1, 200),
+            'salary_max': validate_string(str(job.get('salary_max', 'Not specified')), 'salary_max', 0, 50),
+            'salary_min': validate_string(str(job.get('salary_min', 'Not specified')), 'salary_min', 0, 50),
+            'fit': validate_string(job.get('fit', ''), 'fit', 0, 1000),
+            'location': validate_string(job.get('location', ''), 'location', 0, 100),
+            'type': validate_string(job.get('type', ''), 'type', 0, 50),
+            'industry': validate_string(job.get('industry', ''), 'industry', 0, 100),
+            'deadline': validate_string(job.get('deadline', ''), 'deadline', 0, 50),
+            'remote': validate_string(job.get('remote', 'no'), 'remote', 0, 10),
+            'experience': validate_string(job.get('experience', ''), 'experience', 0, 100),
+            'external_apply_url': validate_url(job.get('external_apply_url', ''))
+        }
+        validated_jobs.append(validated_job)
+
+    return validated_jobs
+
+def validate_string(value: str, field_name: str, min_len: int = 0, max_len: int = 500) -> str:
+    """Validate and sanitize string fields"""
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+    value = value.strip()
+    if len(value) < min_len or len(value) > max_len:
+        raise ValueError(f"{field_name} must be between {min_len} and {max_len} characters")
+    value = value.replace('<', '').replace('>', '').replace('&lt;', '').replace('&gt;', '')
+    value = value.replace('\x00', '')
+    return value
+
+def validate_url(url: str) -> str:
+    """Validate URL format"""
+    if not url or not isinstance(url, str):
+        return "N/A"
+    if not url.startswith(('http://', 'https://')):
+        return "N/A"
+    url = url.replace('<', '').replace('>', '').replace('"', '').replace("'", '')
+    if len(url) > 2048:
+        return "N/A"
+    return url
+
+def validate_user_job_key(email: str, job_category: str) -> str:
+    """Create and validate composite key"""
+    email = validate_email(email)
+    job_category = validate_job_category(job_category)
+    user_job_key = f"{email}#{job_category}"
+    if len(user_job_key) > 300:
+        raise ValueError("User job key too long")
+    return user_job_key
 
 # Environment Variables
 STUDENT_PROFILE_TABLE_NAME = os.getenv('STUDENT_PROFILE_TABLE_NAME')
@@ -59,11 +160,13 @@ def get_student_profile(email: str) -> Dict[str, Any]:
         Dictionary indicating whether the profile exists
     """
     try:
-        # Validate email parameter
-        if not email:
+        # VALIDATE email parameter
+        try:
+            email = validate_email(email)
+        except ValueError as e:
             return {
                 "exists": False,
-                "message": "Email is required"
+                "message": f"Invalid email: {str(e)}"
             }
 
         # Initialize DynamoDB client
@@ -117,41 +220,39 @@ def save_job_recommendations(email: str, job_category: str, jobInformation: list
         Status information about the database operation
     """
     try:
-        # Validate inputs
-        if not email or not job_category:
+        # VALIDATE all inputs
+        try:
+            email = validate_email(email)
+            job_category = validate_job_category(job_category)
+            job_information = validate_job_information(jobInformation)
+        except ValueError as e:
             return {
                 "success": False,
-                "message": "Email and job category are required"
-            }
-
-        if not jobInformation or not isinstance(jobInformation, list):
-            return {
-                "success": False,
-                "message": "Job information must be provided as a non-empty list"
+                "message": f"Validation error: {str(e)}"
             }
 
         # Initialize DynamoDB client
         dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
         table = dynamodb.Table(JOB_RECOMMENDATIONS_TABLE_NAME)
 
-        # Create composite partition key
-        user_job_key = f"{email}#{job_category}"
+        # Create and validate composite partition key
+        user_job_key = validate_user_job_key(email, job_category)
 
         # Generate timestamp for sort key
-        from datetime import datetime
-        created_at = datetime.utcnow().isoformat() + 'Z'  # ISO format with Z suffix
+        from datetime import datetime, timezone
+        created_at = datetime.now(timezone.utc).isoformat() + 'Z'  # ISO format with Z suffix
 
         # Prepare item for DynamoDB
         item = {
-            'userJobKey': user_job_key,
-            'createdAt': created_at,
-            'email': email,
-            'jobCategory': job_category,
-            'jobInformation': jobInformation,
-            'sentToUser': False  # Always false for batch processing
+            'userJobKey': user_job_key,              # ✅ Validated
+            'createdAt': created_at,                 # ✅ System-generated
+            'email': email,                          # ✅ Validated
+            'jobCategory': job_category,             # ✅ Validated
+            'jobInformation': job_information,       # ✅ Validated
+            'sentToUser': False                      # ✅ Hardcoded
         }
 
-        # Put item in DynamoDB
+        # Insert into DynamoDB using boto3 (prevents injection)
         table.put_item(Item=item)
 
         return {
@@ -159,7 +260,7 @@ def save_job_recommendations(email: str, job_category: str, jobInformation: list
             "message": f"Job recommendations saved successfully for {email}",
             "userJobKey": user_job_key,
             "createdAt": created_at,
-            "jobInformation": jobInformation,
+            "jobInformation": job_information,
             "sentToUser": False
         }
 
@@ -183,6 +284,18 @@ def get_job_recommendations(email: str, job_category: str = None, limit: int = 1
         List of job recommendations for the user
     """
     try:
+        # VALIDATE inputs
+        try:
+            email = validate_email(email)
+            if job_category:
+                job_category = validate_job_category(job_category)
+        except ValueError as e:
+            return {
+                "success": False,
+                "message": f"Validation error: {str(e)}",
+                "recommendations": []
+            }
+
         # Initialize DynamoDB client
         dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
         table = dynamodb.Table(JOB_RECOMMENDATIONS_TABLE_NAME)

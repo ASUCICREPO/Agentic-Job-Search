@@ -15,6 +15,55 @@ import os
 from boto3.dynamodb.conditions import Attr
 from email_template import generate_html_email, generate_text_email
 
+# Comprehensive validation functions for DynamoDB security
+def validate_email(email: str) -> str:
+    """Validate email format and prevent injection"""
+    if not email or not isinstance(email, str):
+        raise ValueError("Email is required and must be a string")
+    email = email.strip()
+    if '@' not in email or '.' not in email.split('@')[1]:
+        raise ValueError("Invalid email format")
+    if len(email) < 5 or len(email) > 254:
+        raise ValueError("Email length must be between 5 and 254 characters")
+    allowed_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-_+')
+    if not all(c in allowed_chars for c in email):
+        raise ValueError("Email contains invalid characters")
+    return email.lower()
+
+def validate_string(value: str, field_name: str, min_len: int = 0, max_len: int = 500) -> str:
+    """Validate and sanitize string fields"""
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+    value = value.strip()
+    if len(value) < min_len or len(value) > max_len:
+        raise ValueError(f"{field_name} must be between {min_len} and {max_len} characters")
+    value = value.replace('<', '').replace('>', '').replace('&lt;', '').replace('&gt;', '')
+    value = value.replace('\x00', '')
+    return value
+
+def validate_boolean(value: any, field_name: str) -> bool:
+    """Validate boolean values"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value.lower() in ['true', '1', 'yes']:
+            return True
+        if value.lower() in ['false', '0', 'no']:
+            return False
+    raise ValueError(f"{field_name} must be a boolean value")
+
+def validate_phone_number(phone: str) -> str:
+    """Validate phone number format"""
+    if not phone or not isinstance(phone, str):
+        return "N/A"
+    digits = ''.join(c for c in phone if c.isdigit())
+    if len(digits) == 10:
+        return f"+1{digits}"
+    elif len(digits) == 11 and digits[0] == '1':
+        return f"+{digits}"
+    else:
+        return "N/A"
+
 # Initialize AWS clients
 dynamodb = boto3.resource('dynamodb')
 ses = boto3.client('ses')
@@ -69,18 +118,25 @@ def lambda_handler(event, context):
                 'body': json.dumps('No unsent job recommendations')
             }
         
-        # Group unsent jobs by email and job category
+        # Group unsent jobs by email and job category WITH VALIDATION
         jobs_by_user = {}
         for job in unsent_jobs:
             email = job.get('email')
             job_category = job.get('jobCategory', 'general')
-            
-            if email and '@' in email:
-                if email not in jobs_by_user:
-                    jobs_by_user[email] = {}
-                if job_category not in jobs_by_user[email]:
-                    jobs_by_user[email][job_category] = []
-                jobs_by_user[email][job_category].append(job)
+
+            # VALIDATE job data before processing
+            try:
+                validated_email = validate_email(email) if email else None
+                validated_job_category = validate_string(job_category, 'jobCategory', 0, 100) if job_category else 'general'
+
+                if validated_email:
+                    if validated_email not in jobs_by_user:
+                        jobs_by_user[validated_email] = {}
+                    if validated_job_category not in jobs_by_user[validated_email]:
+                        jobs_by_user[validated_email][validated_job_category] = []
+                    jobs_by_user[validated_email][validated_job_category].append(job)
+            except ValueError as e:
+                print(f"Invalid job data: email={email}, category={job_category}, error={str(e)} - skipping")
         
         # Step 3: Process notifications for opted-in users with unsent jobs
         email_sent_count = 0
@@ -91,43 +147,60 @@ def lambda_handler(event, context):
             user_email = user_profile.get('email')
             communication_method = user_profile.get('communicationMethod', 'email')
             phone = user_profile.get('phone')
-            
-            # Check if user has unsent jobs
-            if user_email not in jobs_by_user:
+
+            # VALIDATE user profile data before processing
+            try:
+                validated_email = validate_email(user_email) if user_email else None
+                validated_communication_method = validate_string(communication_method, 'communicationMethod', 0, 20)
+                validated_phone = validate_phone_number(phone) if phone else None
+                validated_opt_in = validate_boolean(user_profile.get('optInStatus', False), 'optInStatus')
+
+                # Skip if invalid data or not opted in
+                if not validated_email or not validated_opt_in:
+                    print(f"Skipping invalid user profile: email={user_email}")
+                    continue
+
+                # Check if user has unsent jobs
+                if validated_email not in jobs_by_user:
+                    continue
+
+            except ValueError as e:
+                print(f"Invalid user profile data: email={user_email}, error={str(e)} - skipping")
                 continue
             
-            categories = jobs_by_user[user_email]
-            
+            categories = jobs_by_user[validated_email]
+
             try:
                 # Send notifications for each job category
                 for job_category, jobs in categories.items():
                     # Send email if communication method is 'email' or 'both'
-                    if communication_method in ['email', 'both']:
+                    if validated_communication_method in ['email', 'both']:
                         try:
-                            send_job_email(user_email, jobs, user_profile, sender_email, job_category)
+                            send_job_email(validated_email, jobs, user_profile, sender_email, job_category)
                             email_sent_count += 1
-                            print(f"✅ Email sent to {user_email} for {job_category} jobs")
+                            print(f"✅ Email sent to {validated_email} for {job_category} jobs")
                         except Exception as e:
-                            print(f"❌ Failed to send email to {user_email}: {str(e)}")
+                            print(f"❌ Failed to send email to {validated_email}: {str(e)}")
                             failed_count += 1
-                    
+
                     # Send SMS if communication method is 'phone' or 'both'
-                    if communication_method in ['phone', 'both'] and phone:
+                    if validated_communication_method in ['phone', 'both'] and validated_phone and validated_phone != "N/A":
                         try:
-                            send_sms_notification(phone, user_profile.get('fullName', 'Job Seeker'), jobs, job_category, user_email)
+                            validated_full_name = validate_string(user_profile.get('fullName', 'Job Seeker'), 'fullName', 0, 100)
+                            send_sms_notification(validated_phone, validated_full_name, jobs, job_category, validated_email)
                             sms_sent_count += 1
-                            print(f"✅ SMS sent to {phone} for {user_email}")
+                            print(f"✅ SMS sent to {validated_phone} for {validated_email}")
                         except Exception as e:
-                            print(f"❌ Failed to send SMS to {phone}: {str(e)}")
+                            print(f"❌ Failed to send SMS to {validated_phone}: {str(e)}")
                             failed_count += 1
-                    
+
                     # Mark jobs as sent only after successful notification
-                    if communication_method in ['email', 'both'] or (communication_method == 'phone' and phone):
+                    if validated_communication_method in ['email', 'both'] or (validated_communication_method == 'phone' and validated_phone and validated_phone != "N/A"):
                         mark_jobs_as_sent(jobs, job_table)
-                    
+
             except Exception as e:
                 failed_count += 1
-                print(f"❌ Failed to process notifications for {user_email}: {str(e)}")
+                print(f"❌ Failed to process notifications for {validated_email}: {str(e)}")
         
         result = f'Sent {email_sent_count} emails, {sms_sent_count} SMS messages, {failed_count} failed'
         print(f"📊 {result}")

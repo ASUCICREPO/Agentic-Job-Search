@@ -2,7 +2,89 @@ import json
 import boto3
 import os
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
+
+# Comprehensive validation functions for DynamoDB security
+def validate_email(email: str) -> str:
+    """Validate email format and prevent injection"""
+    if not email or not isinstance(email, str):
+        raise ValueError("Email is required and must be a string")
+
+    # Strip whitespace first
+    email = email.strip()
+
+    # Basic email format validation
+    if '@' not in email or '.' not in email.split('@')[1]:
+        raise ValueError("Invalid email format")
+
+    # Length validation
+    if len(email) < 5 or len(email) > 254:
+        raise ValueError("Email length must be between 5 and 254 characters")
+
+    # Character whitelist
+    allowed_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-_+')
+    if not all(c in allowed_chars for c in email):
+        raise ValueError("Email contains invalid characters")
+
+    return email.lower()
+
+def validate_string(value: str, field_name: str, min_len: int = 0, max_len: int = 500) -> str:
+    """Validate and sanitize string fields"""
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+
+    # Strip whitespace
+    value = value.strip()
+
+    # Length validation
+    if len(value) < min_len or len(value) > max_len:
+        raise ValueError(f"{field_name} must be between {min_len} and {max_len} characters")
+
+    # Remove potential XSS characters
+    value = value.replace('<', '').replace('>', '').replace('&lt;', '').replace('&gt;', '')
+
+    # Remove null bytes
+    value = value.replace('\x00', '')
+
+    return value
+
+def validate_boolean(value: any, field_name: str) -> bool:
+    """Validate boolean values"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value.lower() in ['true', '1', 'yes']:
+            return True
+        if value.lower() in ['false', '0', 'no']:
+            return False
+    raise ValueError(f"{field_name} must be a boolean value")
+
+def validate_phone_number(phone: str) -> str:
+    """Validate phone number format"""
+    if not phone or not isinstance(phone, str):
+        return "N/A"
+
+    # Remove all non-digit characters
+    digits = ''.join(c for c in phone if c.isdigit())
+
+    # Must be 10 or 11 digits (with country code)
+    if len(digits) == 10:
+        return f"+1{digits}"
+    elif len(digits) == 11 and digits[0] == '1':
+        return f"+{digits}"
+    else:
+        return "N/A"
+
+def sanitize_email_for_actor_id(email: str) -> str:
+    """
+    Sanitize email for use as DynamoDB actionID.
+    Replaces special characters with underscores for AWS Bedrock compatibility.
+    """
+    if not email:
+        return ""
+    sanitized = ''.join('_' if c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_/*' else c for c in email)
+    sanitized = sanitized.replace('::', ':_')
+    return sanitized
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
@@ -35,9 +117,19 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
 
             print(f"🔍 Retrieving profile for email: {email}")
 
-            # Sanitize email for actionID lookup (same logic as save)
-            sanitized = ''.join('_' if c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_/*' else c for c in email)
-            action_id = sanitized.replace('::', ':_')
+            # VALIDATE email parameter
+            try:
+                email = validate_email(email)
+            except ValueError as e:
+                return {
+                    'statusCode': 400,
+                    'body': json.dumps({
+                        'error': f'Invalid email: {str(e)}'
+                    })
+                }
+
+            # Sanitize email for actionID lookup
+            action_id = sanitize_email_for_actor_id(email)
 
             # Get item from DynamoDB
             response = table.get_item(Key={'actionID': action_id})
@@ -46,20 +138,20 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 item = response['Item']
                 print(f"✅ Profile found for email: {email}")
 
-                # Return profile data (exclude internal fields)
+                # Return profile data with validation on retrieval
                 profile_data = {
-                    'fullName': item.get('fullName', ''),
-                    'location': item.get('location', ''),
-                    'headline': item.get('headline', ''),
-                    'aboutMe': item.get('aboutMe', ''),
-                    'education': item.get('education', ''),
-                    'experience': item.get('experience', ''),
-                    'email': item.get('email', ''),
-                    'phone': item.get('phone', ''),
-                    'preferredJobRole': item.get('preferredJobRole', ''),
-                    'linkedin': item.get('linkedin', ''),
-                    'optInStatus': item.get('optInStatus', False),
-                    'communicationMethod': item.get('communicationMethod', '')
+                    'fullName': validate_string(item.get('fullName', ''), 'fullName', 0, 100),
+                    'location': validate_string(item.get('location', ''), 'location', 0, 100),
+                    'headline': validate_string(item.get('headline', ''), 'headline', 0, 200),
+                    'aboutMe': validate_string(item.get('aboutMe', ''), 'aboutMe', 0, 500),
+                    'education': validate_string(item.get('education', ''), 'education', 0, 500),
+                    'experience': validate_string(item.get('experience', ''), 'experience', 0, 2000),
+                    'email': validate_email(item.get('email', email)),
+                    'phone': validate_phone_number(item.get('phone', '')),
+                    'preferredJobRole': validate_string(item.get('preferredJobRole', ''), 'preferredJobRole', 0, 200),
+                    'linkedin': validate_string(item.get('linkedin', ''), 'linkedin', 0, 200),
+                    'optInStatus': validate_boolean(item.get('optInStatus', False), 'optInStatus'),
+                    'communicationMethod': validate_string(item.get('communicationMethod', 'email'), 'communicationMethod', 0, 20)
                 }
 
                 return {
@@ -99,16 +191,32 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             print(f"📨 Parsed data keys: {list(parsed_data.keys()) if parsed_data else 'None'}")
             print(f"📨 preferredJobRole in parsed_data: {parsed_data.get('preferredJobRole', 'NOT_FOUND')}")
 
-            # Validate required fields
-            if not parsed_data.get('email'):
-                raise ValueError("Email is required")
-
             print(f"🔍 Parsed data: {json.dumps(parsed_data)}")
-            # Use email as actionID with underscore replacement
-            email = parsed_data.get('email')
-            sanitized = ''.join('_' if c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_/*' else c for c in email)
-            # Fix consecutive colons
-            action_id = sanitized.replace('::', ':_')
+
+            # VALIDATE all inputs before processing
+            try:
+                email = validate_email(parsed_data.get('email'))
+                full_name = validate_string(parsed_data.get('fullName', ''), 'fullName', 2, 100)
+                location = validate_string(parsed_data.get('location', ''), 'location', 0, 100)
+                headline = validate_string(parsed_data.get('headline', ''), 'headline', 0, 200)
+                about_me = validate_string(parsed_data.get('aboutMe', ''), 'aboutMe', 0, 500)
+                education = validate_string(parsed_data.get('education', ''), 'education', 0, 500)
+                experience = validate_string(parsed_data.get('experience', ''), 'experience', 0, 2000)
+                phone = validate_phone_number(parsed_data.get('phone', ''))
+                preferred_job_role = validate_string(parsed_data.get('preferredJobRole', ''), 'preferredJobRole', 0, 200)
+                linkedin = validate_string(parsed_data.get('linkedin', ''), 'linkedin', 0, 200)
+                opt_in_status = validate_boolean(parsed_data.get('optInStatus', False), 'optInStatus')
+                communication_method = validate_string(parsed_data.get('communicationMethod', 'email'), 'communicationMethod', 0, 20)
+            except ValueError as e:
+                return {
+                    'statusCode': 400,
+                    'body': json.dumps({
+                        'error': f'Validation error: {str(e)}'
+                    })
+                }
+
+            # Sanitize email for actionID
+            action_id = sanitize_email_for_actor_id(email)
 
             try:
                 print(f"🔍 Checking for existing profile with actionID: {action_id}")
@@ -120,23 +228,22 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 print(f"🔍 Existing item found: {'Yes' if existing_item else 'No'}")
                 print(f"🔍 Existing item keys: {list(existing_item.keys()) if existing_item else 'None'}")
 
-                # Merge existing data with new data (preserve fields not in parsed_data)
+                # Merge existing data with validated new data
                 merged_item = {
-                    **existing_item,  # Keep all existing fields
-                    'actionID': action_id,
-                    'email': email,
-                    'fullName': parsed_data.get('fullName', existing_item.get('fullName', '')),
-                    'location': parsed_data.get('location', existing_item.get('location', '')),
-                    'headline': parsed_data.get('headline', existing_item.get('headline', '')),
-                    'aboutMe': parsed_data.get('aboutMe', existing_item.get('aboutMe', '')),
-                    'education': parsed_data.get('education', existing_item.get('education', '')),
-                    'experience': parsed_data.get('experience', existing_item.get('experience', '')),
-                    'phone': parsed_data.get('phone', existing_item.get('phone', '')),
-                'preferredJobRole': parsed_data.get('preferredJobRole', existing_item.get('preferredJobRole', '')),
-                'linkedin': parsed_data.get('linkedin', existing_item.get('linkedin', '')),
-                'optInStatus': parsed_data.get('optInStatus', existing_item.get('optInStatus', False)),
-                'communicationMethod': parsed_data.get('communicationMethod', existing_item.get('communicationMethod', '')),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'actionID': action_id,              # ✅ Sanitized
+                    'email': email,                     # ✅ Validated
+                    'fullName': full_name,              # ✅ Validated
+                    'location': location,               # ✅ Validated
+                    'headline': headline,               # ✅ Validated
+                    'aboutMe': about_me,                # ✅ Validated
+                    'education': education,             # ✅ Validated
+                    'experience': experience,           # ✅ Validated
+                    'phone': phone,                     # ✅ Validated
+                    'preferredJobRole': preferred_job_role,  # ✅ Validated
+                    'linkedin': linkedin,               # ✅ Validated
+                    'optInStatus': opt_in_status,       # ✅ Validated
+                    'communicationMethod': communication_method,  # ✅ Validated
+                    'timestamp': datetime.now(timezone.utc).isoformat()    # ✅ System-generated
                 }
 
                 print(f"💾 About to save merged item with preferredJobRole: {merged_item.get('preferredJobRole', 'NOT_SET')}")
