@@ -395,7 +395,8 @@ export class jobsearch1 extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ["bedrock:InvokeModel", "bedrock:Converse"],
         resources: [
-          `arn:aws:bedrock:${aws_region}::foundation-model/us.amazon.nova-pro-v1:0`
+          `arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0`,
+          `arn:aws:bedrock:*:${this.account}:inference-profile/us.amazon.nova-pro-v1:0`
         ],
       })
     );
